@@ -10,7 +10,7 @@
    Al cambiar assets, subir VERSION para invalidar las cachés viejas. */
 'use strict';
 
-const VERSION = 'fz-v6';
+const VERSION = 'fz-v7';
 const SHELL_CACHE = VERSION + '-shell';
 const DATA_CACHE = VERSION + '-data';
 
