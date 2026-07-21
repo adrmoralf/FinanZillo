@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="FinanZillo">
+  <title>FinanZillo</title>
+  <meta name="theme-color" content="#f3f2f8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e0e13" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💶</text></svg>">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ===== Login ===== -->
+  <div id="view-login" class="login-wrap hidden">
+    <form id="login-form" class="login-card">
+      <div class="login-logo">💶</div>
+      <h1>FinanZillo</h1>
+      <p class="login-hint">Introduce tu contraseña para entrar</p>
+      <input type="password" id="login-password" placeholder="Contraseña" autocomplete="current-password" required>
+      <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+      <p id="login-error" class="form-error hidden"></p>
+    </form>
+  </div>
+
+  <!-- ===== App ===== -->
+  <div id="app" class="hidden">
+    <div id="offline-bar" class="offline-bar hidden" role="status"></div>
+    <header class="topbar">
+      <div class="topbar-title">💶 <span>FinanZillo</span><span id="server-led" class="led" role="img"></span></div>
+      <nav class="tabs" id="tabs">
+        <button class="tab active" data-view="resumen">Resumen</button>
+        <button class="tab" data-view="movimientos">Movimientos</button>
+        <button class="tab" data-view="inversiones">Inversiones</button>
+        <button class="tab" data-view="recurrentes">Recurrentes</button>
+        <button class="tab" data-view="anual">Anual</button>
+        <button class="tab" data-view="categorias">Categorías</button>
+        <button class="tab" data-view="ajustes">Ajustes</button>
+      </nav>
+      <button id="privacy-toggle" class="icon-btn" title="Ocultar importes">👁️</button>
+      <button id="theme-toggle" class="icon-btn" title="Cambiar tema">🌓</button>
+    </header>
+
+    <main class="content">
+
+      <!-- ===== Resumen ===== -->
+      <section id="view-resumen" class="view">
+        <div class="month-nav">
+          <button class="icon-btn" id="month-prev" aria-label="Mes anterior">‹</button>
+          <h2 id="month-label"></h2>
+          <button class="icon-btn" id="month-next" aria-label="Mes siguiente">›</button>
+        </div>
+
+        <div class="stat-row">
+          <div class="stat-tile">
+            <div class="stat-label"><span class="dot dot-ingreso"></span>Ingresos</div>
+            <div class="stat-value" id="stat-ingresos">—</div>
+            <div class="stat-delta" id="delta-ingresos"></div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label"><span class="dot dot-gasto"></span>Gastos</div>
+            <div class="stat-value" id="stat-gastos">—</div>
+            <div class="stat-delta" id="delta-gastos"></div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Balance</div>
+            <div class="stat-value" id="stat-balance">—</div>
+            <div class="stat-delta"></div>
+          </div>
+        </div>
+
+        <div class="card stats-strip">
+          <div class="mini-stat">
+            <div class="mini-label">Proyección fin de mes</div>
+            <div class="mini-value" id="ms-proyeccion">—</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-label">Media diaria</div>
+            <div class="mini-value" id="ms-media">—</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-label">Días sin gastar</div>
+            <div class="mini-value" id="ms-singastar">—</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-label">Fijos · Variables</div>
+            <div class="mini-value" id="ms-fijos">—</div>
+          </div>
+        </div>
+
+        <div class="card hidden" id="insights-card">
+          <h3>Resumen del mes</h3>
+          <ul class="insights-list" id="insights-list"></ul>
+        </div>
+
+        <div class="card">
+          <div class="section-head">
+            <h3>Cuentas</h3>
+            <button class="btn btn-small" id="btn-new-account">+ Añadir</button>
+          </div>
+          <ul class="account-list" id="account-list"></ul>
+        </div>
+
+        <div class="card">
+          <h3>Patrimonio</h3>
+          <div class="chart-box"><canvas id="chart-networth"></canvas></div>
+        </div>
+
+        <div class="card-grid">
+          <div class="card">
+            <h3>Últimos 12 meses</h3>
+            <div class="chart-box"><canvas id="chart-monthly"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>Gasto por categoría</h3>
+            <div class="donut-layout">
+              <div class="chart-box chart-box-donut"><canvas id="chart-categories"></canvas></div>
+              <ul class="cat-legend" id="cat-legend"></ul>
+            </div>
+            <p class="empty-msg hidden" id="donut-empty">Sin gastos este mes</p>
+          </div>
+        </div>
+
+        <div class="card-grid">
+          <div class="card">
+            <h3>Ritmo de gasto</h3>
+            <div class="chart-box chart-box-short"><canvas id="chart-pace"></canvas></div>
+          </div>
+          <div class="card">
+            <h3>Calendario de gasto</h3>
+            <div class="heatmap" id="heatmap"></div>
+            <div class="chart-box chart-box-weekday"><canvas id="chart-weekday"></canvas></div>
+          </div>
+        </div>
+
+        <div class="card hidden" id="budget-card">
+          <h3>Presupuestos del mes</h3>
+          <ul class="budget-list" id="budget-list"></ul>
+        </div>
+
+        <div class="card">
+          <div class="section-head">
+            <h3>Objetivos de ahorro</h3>
+            <button class="btn btn-small" id="btn-new-goal">+ Nuevo</button>
+          </div>
+          <ul class="budget-list" id="goal-list"></ul>
+          <p class="empty-msg hidden" id="goal-empty">Sin objetivos — crea uno y ve aportando</p>
+        </div>
+
+        <div class="card">
+          <h3>Últimos movimientos</h3>
+          <ul class="tx-list" id="recent-list"></ul>
+        </div>
+      </section>
+
+      <!-- ===== Inversiones ===== -->
+      <section id="view-inversiones" class="view hidden">
+        <div class="section-head">
+          <h2>Inversiones</h2>
+          <span>
+            <button class="btn btn-small" id="btn-refresh-prices">↻ Actualizar precios</button>
+            <button class="btn btn-primary" id="btn-new-investment">+ Nueva</button>
+          </span>
+        </div>
+        <div class="stat-row stat-row-2">
+          <div class="stat-tile">
+            <div class="stat-label">Valor actual</div>
+            <div class="stat-value" id="inv-total">—</div>
+            <div class="stat-delta" id="inv-updated"></div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Ganancia / pérdida</div>
+            <div class="stat-value" id="inv-gain">—</div>
+            <div class="stat-delta" id="inv-gain-pct"></div>
+          </div>
+        </div>
+        <div class="card">
+          <ul class="inv-list" id="inv-list"></ul>
+          <p class="empty-msg hidden" id="inv-empty">Sin inversiones — añade acciones, fondos o cripto y sigue su valor</p>
+        </div>
+      </section>
+
+      <!-- ===== Anual ===== -->
+      <section id="view-anual" class="view hidden">
+        <div class="month-nav">
+          <button class="icon-btn" id="year-prev" aria-label="Año anterior">‹</button>
+          <h2 id="year-label"></h2>
+          <button class="icon-btn" id="year-next" aria-label="Año siguiente">›</button>
+        </div>
+        <div class="stat-row">
+          <div class="stat-tile">
+            <div class="stat-label"><span class="dot dot-ingreso"></span>Ingresos</div>
+            <div class="stat-value" id="year-ingresos">—</div>
+            <div class="stat-delta" id="year-delta-ingresos"></div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label"><span class="dot dot-gasto"></span>Gastos</div>
+            <div class="stat-value" id="year-gastos">—</div>
+            <div class="stat-delta" id="year-delta-gastos"></div>
+          </div>
+          <div class="stat-tile">
+            <div class="stat-label">Balance</div>
+            <div class="stat-value" id="year-balance">—</div>
+            <div class="stat-delta"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Mes a mes</h3>
+          <div class="table-wrap">
+            <table class="year-table" id="year-table"></table>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Gasto por categoría (año)</h3>
+          <ul class="cat-legend" id="year-cats"></ul>
+          <p class="empty-msg hidden" id="year-cats-empty">Sin gastos este año</p>
+        </div>
+      </section>
+
+      <!-- ===== Movimientos ===== -->
+      <section id="view-movimientos" class="view hidden">
+        <div class="filters">
+          <input type="month" id="f-month">
+          <select id="f-type">
+            <option value="">Todos</option>
+            <option value="gasto">Gastos</option>
+            <option value="ingreso">Ingresos</option>
+          </select>
+          <select id="f-category"><option value="">Todas las categorías</option></select>
+          <select id="f-account"><option value="">Todas las cuentas</option></select>
+          <input type="text" id="f-min" inputmode="decimal" placeholder="€ mín" class="filter-amount">
+          <input type="text" id="f-max" inputmode="decimal" placeholder="€ máx" class="filter-amount">
+          <input type="search" id="f-search" placeholder="Buscar… (#etiqueta también)">
+        </div>
+        <div class="filter-totals" id="filter-totals"></div>
+        <ul class="tx-list" id="tx-list"></ul>
+        <p class="empty-msg hidden" id="tx-empty">No hay movimientos con esos filtros</p>
+      </section>
+
+      <!-- ===== Categorías ===== -->
+      <section id="view-categorias" class="view hidden">
+        <div class="section-head">
+          <h2>Categorías</h2>
+          <button class="btn btn-primary" id="btn-new-category">+ Nueva</button>
+        </div>
+        <div class="card">
+          <h3>Gastos</h3>
+          <ul class="cat-list" id="cat-list-gasto"></ul>
+        </div>
+        <div class="card">
+          <h3>Ingresos</h3>
+          <ul class="cat-list" id="cat-list-ingreso"></ul>
+        </div>
+      </section>
+
+      <!-- ===== Recurrentes ===== -->
+      <section id="view-recurrentes" class="view hidden">
+        <div class="section-head">
+          <h2>Recurrentes</h2>
+          <button class="btn btn-primary" id="btn-new-recurring">+ Nuevo</button>
+        </div>
+        <div class="card hidden" id="suggestions-card">
+          <h3>Suscripciones detectadas</h3>
+          <p class="muted">Pagos que se repiten con el mismo importe varios meses — quizá quieras convertirlos en recurrentes.</p>
+          <ul class="rec-list" id="suggestions-list"></ul>
+        </div>
+        <div class="card">
+          <p class="muted">Cosas que pasan solas cada mes el día que elijas: gastos e ingresos (nómina, alquiler, suscripciones), traspasos entre cuentas, y aportaciones a tus inversiones (compran participaciones al precio del día y, si indicas cuenta de origen, apuntan el gasto).</p>
+          <ul class="rec-list" id="rec-list"></ul>
+          <p class="empty-msg hidden" id="rec-empty">No hay recurrentes todavía</p>
+        </div>
+      </section>
+
+      <!-- ===== Ajustes ===== -->
+      <section id="view-ajustes" class="view hidden">
+        <h2>Ajustes</h2>
+        <div class="card">
+          <h3>Atajo de iPhone</h3>
+          <p>Para añadir movimientos desde el iPhone, el atajo debe hacer una petición <code>POST</code> a:</p>
+          <div class="copy-row"><code id="api-url"></code><button class="btn btn-small" data-copy="api-url">Copiar</button></div>
+          <p>con la cabecera <code>Authorization: Bearer &lt;token&gt;</code>. Tu token:</p>
+          <div class="copy-row"><code id="api-token">••••••••</code><button class="btn btn-small" id="btn-show-token">Mostrar</button><button class="btn btn-small" data-copy="api-token">Copiar</button></div>
+          <p class="muted">La guía paso a paso del atajo está en el README del proyecto.</p>
+        </div>
+        <div class="card">
+          <h3>Presupuesto global mensual</h3>
+          <div class="copy-row">
+            <input type="text" id="global-budget" inputmode="decimal" placeholder="p. ej. 1200 (vacío = sin límite)">
+            <button class="btn btn-small" id="btn-save-budget">Guardar</button>
+          </div>
+          <p class="muted">Límite total del mes, además de los presupuestos por categoría. Aparece como primera barra en "Presupuestos del mes".</p>
+        </div>
+        <div class="card">
+          <h3>Cuenta predeterminada</h3>
+          <div class="copy-row">
+            <select id="default-account"></select>
+            <input type="text" id="default-account-new" class="hidden" placeholder="Nombre de la cuenta" maxlength="60">
+            <button class="btn btn-small" id="btn-save-default-account">Guardar</button>
+          </div>
+          <p class="muted">Viene ya seleccionada al crear un movimiento nuevo. Siempre puedes cambiarla en el propio movimiento.</p>
+        </div>
+        <div class="card">
+          <h3>Importar CSV</h3>
+          <p class="muted">Sube un CSV (del banco o de otra app), asigna columnas y previsualiza antes de importar. Los duplicados exactos se saltan solos.</p>
+          <input type="file" id="csv-file" accept=".csv,text/csv,text/plain">
+          <div id="csv-mapper" class="csv-mapper hidden">
+            <div class="csv-selects" id="csv-selects"></div>
+            <div class="table-wrap"><table class="year-table" id="csv-preview"></table></div>
+            <p class="muted" id="csv-count"></p>
+            <button class="btn btn-primary" id="btn-csv-import">Importar</button>
+          </div>
+          <p id="csv-result" class="muted"></p>
+        </div>
+        <div class="card">
+          <h3>Datos</h3>
+          <p><a class="btn" href="api/export.csv">⬇ Exportar todo a CSV</a></p>
+          <p class="muted">Copia de seguridad automática diaria en <code>data/backups/</code> y en tu OneDrive (<code>Gastos_Backup</code>).</p>
+        </div>
+        <div class="card">
+          <h3>Sesión</h3>
+          <button class="btn" id="btn-logout">Cerrar sesión</button>
+        </div>
+      </section>
+    </main>
+
+    <button class="fab" id="fab-add" aria-label="Añadir movimiento">+</button>
+  </div>
+
+  <!-- ===== Modal movimiento ===== -->
+  <dialog id="tx-modal">
+    <form id="tx-form" method="dialog">
+      <h3 id="tx-modal-title">Nuevo movimiento</h3>
+      <div class="template-chips hidden" id="tx-templates"></div>
+      <div class="type-toggle type-toggle-3" id="tx-type-toggle">
+        <button type="button" class="type-btn type-gasto active" data-type="gasto">Gasto</button>
+        <button type="button" class="type-btn type-ingreso" data-type="ingreso">Ingreso</button>
+        <button type="button" class="type-btn type-transfer" data-type="transfer">Transf.</button>
+      </div>
+      <label>Importe
+        <input type="text" id="tx-amount" inputmode="decimal" placeholder="0,00" required>
+      </label>
+      <label id="tx-category-label">Categoría
+        <select id="tx-category"></select>
+      </label>
+      <label id="tx-from-label" class="hidden">De la cuenta
+        <select id="tx-from" class="account-select"></select>
+        <input type="text" id="tx-from-new" class="hidden" placeholder="Nombre de la cuenta">
+      </label>
+      <label id="tx-to-label" class="hidden">A la cuenta
+        <select id="tx-to" class="account-select"></select>
+        <input type="text" id="tx-to-new" class="hidden" placeholder="Nombre de la cuenta">
+      </label>
+      <label>Fecha
+        <input type="date" id="tx-date" required>
+      </label>
+      <label>Nota
+        <input type="text" id="tx-note" placeholder="Opcional">
+      </label>
+      <label id="tx-account-label">Cuenta
+        <select id="tx-account" class="account-select"></select>
+        <input type="text" id="tx-account-new" class="hidden" placeholder="Nombre de la cuenta">
+      </label>
+      <label id="tx-tags-label">Etiquetas
+        <input type="text" id="tx-tags" placeholder="Opcional, separadas por espacios (vacaciones2026…)">
+      </label>
+      <p class="form-error hidden" id="tx-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn hidden" id="tx-save-template" title="Guardar como plantilla rápida">☆ Plantilla</button>
+        <button type="button" class="btn" id="tx-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary" id="tx-save">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===== Modal categoría ===== -->
+  <dialog id="cat-modal">
+    <form id="cat-form" method="dialog">
+      <h3 id="cat-modal-title">Nueva categoría</h3>
+      <div class="type-toggle" id="cat-type-toggle">
+        <button type="button" class="type-btn type-gasto active" data-type="gasto">Gasto</button>
+        <button type="button" class="type-btn type-ingreso" data-type="ingreso">Ingreso</button>
+      </div>
+      <label>Nombre
+        <input type="text" id="cat-name" required>
+      </label>
+      <label>Emoji
+        <input type="text" id="cat-icon" maxlength="4" placeholder="📦">
+      </label>
+      <label id="cat-budget-label">Presupuesto mensual (vacío = sin presupuesto)
+        <input type="text" id="cat-budget" inputmode="decimal" placeholder="p. ej. 300">
+      </label>
+      <label id="cat-fixed-label" class="check-label">
+        <input type="checkbox" id="cat-fixed"> Gasto fijo (alquiler, suscripciones…)
+      </label>
+      <label>Color</label>
+      <div class="swatches" id="cat-swatches"></div>
+      <p class="form-error hidden" id="cat-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="cat-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===== Modal recurrente ===== -->
+  <dialog id="rec-modal">
+    <form id="rec-form" method="dialog">
+      <h3 id="rec-modal-title">Nuevo recurrente</h3>
+      <div class="type-toggle type-toggle-2x2" id="rec-type-toggle">
+        <button type="button" class="type-btn type-gasto active" data-kind="gasto">Gasto</button>
+        <button type="button" class="type-btn type-ingreso" data-kind="ingreso">Ingreso</button>
+        <button type="button" class="type-btn type-transfer" data-kind="traspaso">Traspaso</button>
+        <button type="button" class="type-btn type-invest" data-kind="aportacion">Aportación</button>
+      </div>
+      <label>Importe
+        <input type="text" id="rec-amount" inputmode="decimal" placeholder="0,00" required>
+      </label>
+      <label id="rec-category-label">Categoría
+        <select id="rec-category"></select>
+      </label>
+      <label id="rec-investment-label" class="hidden">Inversión (de tu pestaña Inversiones)
+        <select id="rec-investment"></select>
+      </label>
+      <label id="rec-from-label" class="hidden">De la cuenta
+        <select id="rec-from" class="account-select"></select>
+        <input type="text" id="rec-from-new" class="hidden" placeholder="Nombre de la cuenta">
+      </label>
+      <label id="rec-to-label" class="hidden">A la cuenta
+        <select id="rec-to" class="account-select"></select>
+        <input type="text" id="rec-to-new" class="hidden" placeholder="Nombre de la cuenta">
+      </label>
+      <label id="rec-source-label" class="hidden">Desde la cuenta (opcional — apunta el gasto)
+        <select id="rec-source" class="account-select"></select>
+        <input type="text" id="rec-source-new" class="hidden" placeholder="Nombre de la cuenta">
+      </label>
+      <label>Día del mes
+        <input type="number" id="rec-day" min="1" max="31" value="1" required>
+      </label>
+      <label>Nota
+        <input type="text" id="rec-note" placeholder="p. ej. Netflix">
+      </label>
+      <p class="form-error hidden" id="rec-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="rec-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===== Modal inversión ===== -->
+  <dialog id="inv-modal">
+    <form id="inv-form" method="dialog">
+      <h3 id="inv-modal-title">Nueva inversión</h3>
+      <label>Nombre
+        <input type="text" id="inv-name" placeholder="p. ej. MSCI World" required>
+      </label>
+      <label>Tipo
+        <select id="inv-provider">
+          <option value="yahoo">Bolsa / fondos / ETF (Yahoo Finance)</option>
+          <option value="coingecko">Criptomoneda (CoinGecko)</option>
+          <option value="manual">Manual (precio a mano)</option>
+        </select>
+      </label>
+      <label id="inv-symbol-label">Símbolo / ticker — escribe el nombre y elige de las sugerencias
+        <input type="text" id="inv-symbol" placeholder="p. ej. iShares ACWI, Apple, bitcoin…" list="inv-symbol-options" autocomplete="off">
+        <datalist id="inv-symbol-options"></datalist>
+        <span class="muted" id="inv-symbol-hint"></span>
+      </label>
+      <label>Unidades / participaciones
+        <input type="text" id="inv-units" inputmode="decimal" placeholder="p. ej. 12,5" required>
+      </label>
+      <label>Coste total de compra (€)
+        <input type="text" id="inv-cost" inputmode="decimal" placeholder="lo que pagaste en total">
+      </label>
+      <label id="inv-price-label" class="hidden">Precio actual por unidad (€)
+        <input type="text" id="inv-price" inputmode="decimal" placeholder="p. ej. 105,50">
+      </label>
+      <p class="form-error hidden" id="inv-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="inv-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===== Modal objetivo ===== -->
+  <dialog id="goal-modal">
+    <form id="goal-form" method="dialog">
+      <h3 id="goal-modal-title">Nuevo objetivo</h3>
+      <label>Nombre
+        <input type="text" id="goal-name" placeholder="p. ej. Viaje a Japón" required>
+      </label>
+      <label>Emoji
+        <input type="text" id="goal-icon" maxlength="4" placeholder="🎯">
+      </label>
+      <label>Cantidad objetivo (€)
+        <input type="text" id="goal-target" inputmode="decimal" placeholder="p. ej. 3000" required>
+      </label>
+      <label>Fecha límite (opcional — sugiere la cuota mensual)
+        <input type="date" id="goal-deadline">
+      </label>
+      <p class="form-error hidden" id="goal-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="goal-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===== Modal aportar a objetivo ===== -->
+  <dialog id="amount-modal">
+    <form id="amount-form" method="dialog">
+      <h3 id="amount-modal-title">Aportar</h3>
+      <label>Importe (negativo para retirar)
+        <input type="text" id="amount-input" inputmode="decimal" placeholder="p. ej. 100" required>
+      </label>
+      <p class="form-error hidden" id="amount-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="amount-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===== Modal cuenta ===== -->
+  <dialog id="account-modal">
+    <form id="account-form" method="dialog">
+      <h3 id="account-modal-title">Editar cuenta</h3>
+      <label>Nombre
+        <input type="text" id="account-name" placeholder="p. ej. ING, Hucha, Trade Republic…" maxlength="60" required>
+      </label>
+      <label>Saldo a fecha
+        <input type="text" id="account-opening" inputmode="decimal" placeholder="0,00" required>
+      </label>
+      <label>Fecha
+        <input type="date" id="account-opening-date" required>
+      </label>
+      <label>TAE (%) — cuenta remunerada, vacío si no aplica
+        <input type="text" id="account-apy" inputmode="decimal" placeholder="p. ej. 2,25">
+      </label>
+      <div id="account-reconcile-block" class="reconcile-block hidden">
+        <label>Cuadrar: saldo real ahora mismo
+          <span class="copy-row reconcile-row">
+            <input type="text" id="account-real" inputmode="decimal" placeholder="p. ej. 123,45">
+            <button type="button" class="btn btn-small" id="account-reconcile">Crear ajuste</button>
+          </span>
+        </label>
+        <p class="muted" id="account-reconcile-hint">Crea un movimiento de ajuste por la diferencia con el saldo calculado.</p>
+      </div>
+      <p class="form-error hidden" id="account-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger hidden" id="account-delete">Eliminar</button>
+        <button type="button" class="btn" id="account-cancel">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ===== Modal detalle de categoría ===== -->
+  <dialog id="catdetail-modal" class="dialog-wide">
+    <div class="catdetail">
+      <h3 id="catdetail-title">Categoría</h3>
+      <p class="muted" id="catdetail-total"></p>
+      <div class="chart-box chart-box-catdetail"><canvas id="catdetail-chart"></canvas></div>
+      <h3 class="catdetail-subtitle" id="catdetail-month-label">Movimientos del mes</h3>
+      <ul class="tx-list" id="catdetail-list"></ul>
+      <p class="empty-msg hidden" id="catdetail-empty">Sin movimientos este mes</p>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="catdetail-close">Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ===== Modal operaciones de inversión ===== -->
+  <dialog id="ops-modal" class="dialog-wide">
+    <div class="ops-wrap">
+      <h3 id="ops-title">Operaciones</h3>
+      <p class="muted" id="ops-summary"></p>
+      <ul class="rec-list" id="ops-list"></ul>
+      <form id="ops-form" class="ops-form">
+        <div class="ops-form-row">
+          <select id="op-type">
+            <option value="compra">Compra</option>
+            <option value="venta">Venta</option>
+          </select>
+          <input type="text" id="op-units" inputmode="decimal" placeholder="Unidades" required>
+          <input type="text" id="op-amount" inputmode="decimal" placeholder="Importe €" required>
+          <input type="date" id="op-date" required>
+        </div>
+        <p class="form-error hidden" id="ops-error"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="ops-close">Cerrar</button>
+          <button type="submit" class="btn btn-primary">Añadir operación</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

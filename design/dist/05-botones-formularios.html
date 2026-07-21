@@ -1,0 +1,252 @@
+<!-- @dsCard name="Botones y formularios" group="Componentes" subtitle="Acciones, selector de tipo, inputs y navegación" -->
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+/* ============================================================
+   FinanZillo — sistema de diseño v1 (propuesta "fintech moderna")
+   Los previews muestran cada componente en claro (.mg-light) y
+   oscuro (.mg-dark). La paleta de las gráficas es la validada
+   (dataviz) y NO cambia; lo que cambia: superficies, radio,
+   sombras, tipografía y formas.
+   ============================================================ */
+
+* { box-sizing: border-box; margin: 0; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #b9c0cb;
+  padding: 16px;
+  display: grid;
+  gap: 16px;
+}
+
+/* ---------- tokens ---------- */
+.mg {
+  padding: 24px;
+  border-radius: 20px;
+  background: var(--page);
+  color: var(--ink);
+  display: grid;
+  gap: 14px;
+  font-size: 14px;
+}
+.mg-light {
+  --page: #f2f4f7;
+  --surface: #ffffff;
+  --surface-2: #eaeef3;
+  --ink: #0e1116;
+  --ink-2: #4a5361;
+  --muted: #8a93a1;
+  --border: rgba(14, 17, 22, 0.07);
+  --shadow: 0 1px 2px rgba(14,17,22,.05), 0 10px 28px rgba(14,17,22,.07);
+  --accent: #2a78d6;
+  --accent-ink: #ffffff;
+  --gasto: #e34948;
+  --positive: #006300;
+  --negative: #d03b3b;
+  --warning: #b97e00;
+  --grid: #e3e7ed;
+}
+.mg-dark {
+  --page: #0d0f13;
+  --surface: #161a21;
+  --surface-2: #1e242e;
+  --ink: #f2f4f7;
+  --ink-2: #b7bec9;
+  --muted: #7d8694;
+  --border: rgba(255, 255, 255, 0.09);
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.35);
+  --accent: #3987e5;
+  --accent-ink: #ffffff;
+  --gasto: #e66767;
+  --positive: #0ca30c;
+  --negative: #e66767;
+  --warning: #fab219;
+  --grid: #262c37;
+}
+
+/* ---------- base ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+}
+.card-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.num { font-variant-numeric: tabular-nums; }
+.row { display: flex; align-items: center; gap: 10px; }
+.grow { flex: 1; min-width: 0; }
+.mut { color: var(--muted); font-size: 12px; }
+
+/* ---------- tiles ---------- */
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+  display: grid;
+  gap: 4px;
+}
+.tile .label { font-size: 12px; font-weight: 600; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+.tile .value { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+.tile .delta { font-size: 12px; font-weight: 600; }
+.delta.good { color: var(--positive); }
+.delta.bad { color: var(--negative); }
+.dot { width: 8px; height: 8px; border-radius: 99px; display: inline-block; }
+.dot-in { background: var(--accent); }
+.dot-out { background: var(--gasto); }
+.ministats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.ministat { display: grid; gap: 2px; }
+.ministat .k { font-size: 11px; color: var(--muted); }
+.ministat .v { font-size: 15px; font-weight: 700; }
+
+/* ---------- chips de categoría ---------- */
+.chip {
+  width: 38px; height: 38px; border-radius: 12px; flex: none;
+  display: grid; place-items: center; font-size: 18px;
+  background: color-mix(in srgb, var(--c, #8a93a1) 14%, transparent);
+}
+
+/* ---------- botones y formularios ---------- */
+.btn {
+  font: inherit; font-weight: 600; cursor: pointer;
+  border-radius: 12px; padding: 10px 16px;
+  border: 1px solid var(--border);
+  background: var(--surface); color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn-danger { color: var(--negative); }
+.btn-ghost { background: transparent; box-shadow: none; }
+.input {
+  font: inherit; width: 100%;
+  border-radius: 12px; padding: 11px 14px;
+  border: 1px solid var(--border);
+  background: var(--surface); color: var(--ink);
+}
+.input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; background: var(--surface-2); padding: 5px; border-radius: 14px; }
+.seg .opt { text-align: center; padding: 8px 10px; border-radius: 10px; font-weight: 600; color: var(--ink-2); font-size: 13px; }
+.seg .opt.on-gasto { background: var(--gasto); color: #fff; box-shadow: var(--shadow); }
+.seg .opt.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+
+/* ---------- tabs / navegación ---------- */
+.topbar { display: flex; align-items: center; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow); padding: 10px 14px; }
+.brand { font-weight: 800; letter-spacing: -0.02em; }
+.tabs { display: flex; gap: 4px; }
+.tab { padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.tab.active { background: var(--accent); color: var(--accent-ink); }
+.fab { width: 52px; height: 52px; border-radius: 18px; background: var(--accent); color: #fff; font-size: 26px; display: grid; place-items: center; box-shadow: var(--shadow); }
+
+/* ---------- barras de progreso ---------- */
+.bar-item { display: grid; gap: 7px; }
+.bar-head { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.bar-head .name { font-weight: 600; flex: 1; }
+.bar-head .nums { color: var(--ink-2); font-size: 12px; }
+.bar-head .pct { font-weight: 800; }
+.pct.warning { color: var(--warning); }
+.pct.critical { color: var(--negative); }
+.track { height: 9px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.fill { height: 100%; border-radius: 99px; background: #0ca30c; }
+.fill.warning { background: #fab219; }
+.fill.critical { background: #d03b3b; }
+.fill.goal { background: var(--accent); }
+
+/* ---------- lista de movimientos ---------- */
+.day { font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding-top: 6px; }
+.tx { display: flex; align-items: center; gap: 12px; padding: 9px 0; }
+.tx + .tx { border-top: 1px solid var(--grid); }
+.tx .t1 { font-weight: 600; font-size: 14px; }
+.tx .t2 { font-size: 12px; color: var(--muted); }
+.tx .amt { font-weight: 800; font-size: 14.5px; }
+.amt.in { color: var(--positive); }
+.amt.mov { color: var(--ink-2); }
+
+/* ---------- cuentas ---------- */
+.accounts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.account {
+  border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px;
+  background: var(--surface); box-shadow: var(--shadow);
+  display: flex; align-items: center; gap: 10px;
+}
+.account .name { font-size: 12px; color: var(--ink-2); font-weight: 600; }
+.account .bal { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
+.account .apy { font-size: 10.5px; color: var(--positive); font-weight: 600; }
+.account.total { background: var(--surface-2); border-style: dashed; box-shadow: none; }
+.badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 99px; background: color-mix(in srgb, var(--positive) 14%, transparent); color: var(--positive); }
+
+/* ---------- swatches ---------- */
+.swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.sw { border-radius: 12px; padding: 10px; display: grid; gap: 6px; border: 1px solid var(--border); background: var(--surface); }
+.sw .c { height: 34px; border-radius: 8px; }
+.sw .n { font-size: 11px; font-weight: 600; }
+.sw .h { font-size: 10px; color: var(--muted); font-family: ui-monospace, monospace; }
+
+/* ---------- inversiones ---------- */
+.inv { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.inv + .inv { border-top: 1px solid var(--grid); }
+.inv .nums { text-align: right; }
+.gain-pos { color: var(--positive); font-weight: 600; font-size: 12px; }
+.gain-neg { color: var(--negative); font-weight: 600; font-size: 12px; }
+
+</style>
+</head>
+<body>
+<template id="demo">
+<div class="card">
+  <div class="card-title">Botones</div>
+  <div class="row" style="flex-wrap:wrap">
+    <button class="btn btn-primary">Guardar</button>
+    <button class="btn">Cancelar</button>
+    <button class="btn btn-danger">Eliminar</button>
+    <button class="btn btn-ghost">+ Añadir</button>
+    <div class="fab">+</div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">Selector de tipo (modal de movimiento)</div>
+  <div class="seg">
+    <div class="opt on-gasto">Gasto</div>
+    <div class="opt">Ingreso</div>
+    <div class="opt">Transf.</div>
+  </div>
+  <input class="input num" value="12,50" aria-label="Importe">
+  <input class="input" placeholder="Nota (opcional)">
+</div>
+<div class="card">
+  <div class="card-title">Navegación</div>
+  <div class="topbar">
+    <div class="brand">💶 FinanZillo</div>
+    <div class="tabs grow">
+      <div class="tab active">Resumen</div>
+      <div class="tab">Movimientos</div>
+      <div class="tab">Inversiones</div>
+      <div class="tab">Recurrentes</div>
+    </div>
+  </div>
+</div>
+
+</template>
+<script>
+for (const theme of ['mg-light', 'mg-dark']) {
+  const wrap = document.createElement('div');
+  wrap.className = 'mg ' + theme;
+  wrap.appendChild(document.getElementById('demo').content.cloneNode(true));
+  document.body.appendChild(wrap);
+}
+</script>
+</body>
+</html>

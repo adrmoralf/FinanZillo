@@ -1,0 +1,20 @@
+{
+  "name": "finanzillo",
+  "version": "1.0.0",
+  "description": "App personal de control de gastos e ingresos",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed:demo": "node scripts/seed-demo.js",
+    "icons": "node scripts/make-icons.js"
+  },
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

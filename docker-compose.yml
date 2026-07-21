@@ -1,0 +1,13 @@
+services:
+  finanzillo:
+    build: .
+    container_name: finanzillo
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+    environment:
+      # Las variables de entorno tienen prioridad sobre el .env generado.
+      - PASSWORD=${PASSWORD:?Define PASSWORD (p. ej. en un archivo .env junto a este compose)}
+      - API_TOKEN=${API_TOKEN:?Define API_TOKEN}

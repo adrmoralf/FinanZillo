@@ -1,0 +1,760 @@
+/* ===== Tokens (paleta de datos validada intacta; estilo "ultravioleta" propio) ===== */
+:root {
+  --page: #f3f2f8;
+  --surface: #ffffff;
+  --surface-2: #eeedf5;
+  --text: #14131b;
+  --text-2: #565566;
+  --muted: #8b8a99;
+  --grid: #e5e4ee;
+  --border: rgba(20, 19, 27, 0.08);
+  --accent: #5a43e0;
+  --accent-2: #2f6fe4;
+  --grad-accent: linear-gradient(135deg, #5a43e0, #2f6fe4);
+  --ingreso: #2a78d6;
+  --gasto: #e34948;
+  --positive: #006300;
+  --negative: #d03b3b;
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+  --focus: #5a43e0;
+  --shadow-card: 0 1px 2px rgba(24, 20, 50, 0.05), 0 12px 32px -20px rgba(24, 20, 50, 0.22);
+  --shadow-pop: 0 24px 60px -24px rgba(24, 20, 50, 0.35);
+  /* Brillo superior tipo cristal sobre las superficies (profundidad, nunca plano). */
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0) 42%);
+  --hairline: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  /* Degradado "hero" (tiles de balance y patrimonio) con un punto de luz. */
+  --grad-hero:
+    radial-gradient(120% 140% at 0% 0%, rgba(255, 255, 255, 0.22), transparent 45%),
+    linear-gradient(135deg, #6a4fe6 0%, #5a43e0 48%, #2f6fe4 100%);
+  --glow-accent: 0 10px 26px -10px color-mix(in srgb, var(--accent) 60%, transparent);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --page: #0e0e13;
+  --surface: #17171f;
+  --surface-2: #21212c;
+  --text: #ffffff;
+  --text-2: #b0afbe;
+  --muted: #858492;
+  --grid: #272733;
+  --border: rgba(255, 255, 255, 0.08);
+  --accent: #7c6cf6;
+  --accent-2: #3d8bfd;
+  --grad-accent: linear-gradient(135deg, #7c6cf6, #3d8bfd);
+  --ingreso: #3987e5;
+  --gasto: #e66767;
+  --positive: #0ca30c;
+  --negative: #d03b3b;
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+  --focus: #9a8dff;
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.04), 0 14px 36px -22px rgba(0, 0, 0, 0.65);
+  --shadow-pop: 0 28px 70px -28px rgba(0, 0, 0, 0.8);
+  --sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 46%);
+  --hairline: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --grad-hero:
+    radial-gradient(120% 140% at 0% 0%, rgba(255, 255, 255, 0.18), transparent 45%),
+    linear-gradient(135deg, #7c6cf6 0%, #6a5cf0 48%, #3d8bfd 100%);
+  --glow-accent: 0 12px 32px -10px color-mix(in srgb, var(--accent) 65%, transparent);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(46rem 32rem at 100% -6%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 58%),
+    radial-gradient(40rem 30rem at -8% 6%, color-mix(in srgb, var(--accent-2) 8%, transparent), transparent 55%),
+    var(--page);
+  background-attachment: fixed;
+  color: var(--text);
+  min-height: 100dvh;
+  /* iOS: sin destello gris al tocar, sin inflado de texto en horizontal y sin
+     rebote que asome el fondo del navegador en modo app. */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  overscroll-behavior-y: contain;
+}
+::selection { background: var(--accent); color: #fff; }
+
+/* Scrollbar fina y con carácter (WebKit/Blink). */
+* { scrollbar-width: thin; scrollbar-color: var(--grid) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--grid); border-radius: 999px; border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); background-clip: content-box; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); font-size: 0.85rem; }
+code {
+  background: var(--surface-2);
+  border: none;
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 0.85em;
+  word-break: break-all;
+}
+h1, h2, h3 { font-weight: 700; }
+h2 { font-size: 1.3rem; font-weight: 800; letter-spacing: -0.015em; margin: 0.5rem 0; }
+h3 {
+  font-size: 0.76rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin: 0 0 0.8rem; color: var(--muted);
+}
+
+/* ===== Botones y controles ===== */
+.btn {
+  display: inline-block;
+  border: none;
+  background: var(--surface-2);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  box-shadow: var(--hairline);
+  transition: filter 0.12s, background 0.12s, transform 0.1s, box-shadow 0.12s;
+}
+.btn:hover { filter: brightness(0.96); }
+:root[data-theme="dark"] .btn:hover { filter: brightness(1.15); }
+.btn:active { transform: scale(0.96); }
+.btn-primary { background: var(--grad-accent); color: #fff; box-shadow: var(--glow-accent); }
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-small { padding: 0.3rem 0.75rem; font-size: 0.8rem; }
+.btn-danger {
+  color: var(--negative);
+  background: transparent;
+  border: 1px solid var(--negative);
+  margin-right: auto;
+}
+.btn-block { width: 100%; }
+.icon-btn {
+  border: none; background: none; color: var(--text-2);
+  font-size: 1.2rem; cursor: pointer; padding: 0.35rem 0.6rem; border-radius: 12px;
+}
+.icon-btn:hover { background: var(--surface-2); }
+input, select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 0.6rem 0.85rem;
+}
+input, select { transition: box-shadow 0.14s, background 0.14s; }
+/* Los input de archivo traen un ancho intrínseco que no encoge y desbordaban
+   la pantalla en móvil (Ajustes → importar CSV). */
+input[type="file"] { max-width: 100%; box-sizing: border-box; }
+input:focus, select:focus {
+  outline: none;
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* ===== Login ===== */
+.login-wrap {
+  min-height: 100dvh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+  background:
+    radial-gradient(60rem 40rem at 85% -10%, rgba(90, 67, 224, 0.16), transparent 60%),
+    radial-gradient(50rem 35rem at -10% 110%, rgba(47, 111, 228, 0.14), transparent 60%),
+    var(--page);
+}
+.login-card {
+  background-color: var(--surface);
+  background-image: var(--sheen);
+  border: none;
+  border-radius: 24px;
+  box-shadow: var(--shadow-pop), var(--hairline);
+  padding: 2.25rem 2rem;
+  width: 100%; max-width: 340px;
+  display: flex; flex-direction: column; gap: 0.9rem;
+  text-align: center;
+}
+.login-logo {
+  font-size: 2.2rem;
+  width: 76px; height: 76px; margin: 0 auto 0.25rem;
+  border-radius: 24px; display: grid; place-items: center;
+  background: var(--grad-hero); box-shadow: var(--glow-accent);
+}
+.login-card h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.login-hint { margin: 0; color: var(--text-2); font-size: 0.9rem; }
+.form-error { color: var(--negative); font-size: 0.85rem; margin: 0; }
+
+/* ===== Barra superior ===== */
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; gap: 1rem;
+  background: var(--page);
+  background: color-mix(in srgb, var(--page) 82%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border-bottom: none;
+  padding: 0.6rem 1rem;
+  padding-top: max(0.6rem, env(safe-area-inset-top));
+}
+.topbar-title { font-weight: 800; letter-spacing: -0.015em; white-space: nowrap; }
+
+/* LED de estado del servidor. El color no va solo: el title dice el estado en
+   texto y el LED apagado además se vacía por dentro (aro), para no depender
+   de distinguir verde de rojo. */
+.led {
+  display: inline-block; vertical-align: middle;
+  width: 9px; height: 9px; margin-left: 0.5rem;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.led.up {
+  background: var(--positive);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--positive) 22%, transparent);
+}
+.led.down {
+  background: transparent;
+  border: 2px solid var(--negative);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--negative) 18%, transparent);
+}
+.tabs { display: flex; gap: 0.3rem; flex: 1; justify-content: center; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  border: none; background: none; color: var(--text-2);
+  font: inherit; font-size: 0.88rem; font-weight: 600;
+  padding: 0.45rem 0.95rem; border-radius: 999px; cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s;
+}
+.tab:hover { background: var(--surface-2); }
+.tab:active { transform: scale(0.96); }
+.tab.active { background: var(--grad-accent); color: #fff; box-shadow: var(--glow-accent); }
+
+.content {
+  max-width: 1000px;
+  margin: 0 auto;
+  /* Deja hueco al indicador de inicio del iPhone y a los bordes en horizontal. */
+  padding: 1rem max(1rem, env(safe-area-inset-right)) calc(6rem + env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left));
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.view { display: flex; flex-direction: column; gap: 1rem; }
+
+/* ===== Resumen ===== */
+.month-nav {
+  display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+}
+.month-nav h2 { min-width: 12rem; text-align: center; }
+.month-nav .icon-btn {
+  background-color: var(--surface); background-image: var(--sheen);
+  box-shadow: var(--shadow-card), var(--hairline);
+  border-radius: 50%; width: 40px; height: 40px; padding: 0;
+  font-size: 1.35rem; line-height: 1;
+  transition: transform 0.1s, background 0.12s;
+}
+.month-nav .icon-btn:hover { background-color: var(--surface-2); }
+.month-nav .icon-btn:active { transform: scale(0.9); }
+.stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.85rem; }
+.stat-tile {
+  position: relative;
+  background-color: var(--surface);
+  background-image: var(--sheen);
+  border: none;
+  border-radius: 20px;
+  box-shadow: var(--shadow-card), var(--hairline);
+  padding: 1rem 1.1rem;
+}
+/* Tile de Balance (última del trío) como tarjeta hero con degradado. */
+.stat-row:not(.stat-row-2) .stat-tile:last-child {
+  background: var(--grad-hero);
+  box-shadow: var(--glow-accent);
+  color: #fff;
+}
+.stat-row:not(.stat-row-2) .stat-tile:last-child .stat-label,
+.stat-row:not(.stat-row-2) .stat-tile:last-child .stat-value,
+.stat-row:not(.stat-row-2) .stat-tile:last-child .stat-value.positive,
+.stat-row:not(.stat-row-2) .stat-tile:last-child .stat-value.negative { color: #fff; }
+.stat-row:not(.stat-row-2) .stat-tile:last-child .stat-label { opacity: 0.85; }
+.stat-label {
+  font-size: 0.78rem; color: var(--text-2); font-weight: 600;
+  display: flex; align-items: center; gap: 0.4rem;
+}
+.stat-value {
+  font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em;
+  margin-top: 0.25rem; font-variant-numeric: tabular-nums;
+}
+.stat-value.positive { color: var(--positive); }
+.stat-value.negative { color: var(--negative); }
+.stat-delta { font-size: 0.75rem; color: var(--muted); min-height: 1.4em; margin-top: 0.3rem; }
+.stat-delta.good {
+  color: var(--positive);
+  background: color-mix(in srgb, var(--positive) 12%, transparent);
+  display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-weight: 600;
+}
+.stat-delta.bad {
+  color: var(--negative);
+  background: color-mix(in srgb, var(--negative) 12%, transparent);
+  display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-weight: 600;
+}
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.dot-ingreso { background: var(--ingreso); }
+.dot-gasto { background: var(--gasto); }
+
+.card {
+  position: relative;
+  background-color: var(--surface);
+  background-image: var(--sheen);
+  border: none;
+  border-radius: 20px;
+  box-shadow: var(--shadow-card), var(--hairline);
+  padding: 1.1rem 1.15rem;
+}
+.card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.chart-box { position: relative; height: 240px; }
+.chart-box-donut { height: 200px; flex: 0 0 200px; }
+.donut-layout { display: flex; align-items: center; gap: 1rem; }
+.cat-legend { list-style: none; margin: 0; padding: 0; flex: 1; min-width: 0; }
+.cat-legend li {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.85rem; padding: 0.22rem 0;
+}
+.cat-legend .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.cat-legend .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.cat-legend .val { font-variant-numeric: tabular-nums; font-weight: 600; }
+.cat-legend .pct { color: var(--muted); font-variant-numeric: tabular-nums; width: 3em; text-align: right; }
+.empty-msg {
+  color: var(--muted); text-align: center; padding: 1.25rem 1rem;
+  border: 1.5px dashed var(--grid); border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-2) 45%, transparent);
+}
+
+/* ===== Strip de mini-estadísticas ===== */
+.stats-strip {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem;
+}
+.mini-label { font-size: 0.72rem; color: var(--muted); font-weight: 600; }
+.mini-value { font-size: 1rem; font-weight: 700; margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+.mini-value.bad { color: var(--negative); }
+.mini-value.good { color: var(--positive); }
+
+/* ===== Cartera ===== */
+.stat-row-2 { grid-template-columns: 1fr 1fr; }
+.inv-list { list-style: none; margin: 0; padding: 0; }
+.inv-item {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.65rem 0.2rem; border-bottom: 1px solid var(--grid);
+}
+.inv-item:last-child { border-bottom: none; }
+.inv-item .info { flex: 1; min-width: 0; }
+.inv-item .name { font-size: 0.92rem; font-weight: 600; }
+.inv-item .detail { font-size: 0.78rem; color: var(--muted); }
+.inv-item .nums { text-align: right; }
+.inv-item .value { font-weight: 800; font-variant-numeric: tabular-nums; }
+.inv-item .gain { font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.gain.positive { color: var(--positive); }
+.gain.negative { color: var(--negative); }
+
+/* ===== Tabla anual / previsualización CSV ===== */
+.table-wrap { overflow-x: auto; }
+.year-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.year-table th {
+  text-align: right; font-weight: 600; color: var(--text-2);
+  padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border);
+}
+.year-table th:first-child, .year-table td:first-child { text-align: left; }
+.year-table td {
+  text-align: right; padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--grid);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.year-table tr.total td { font-weight: 800; border-top: 2px solid var(--border); }
+.year-table td.positive { color: var(--positive); }
+.year-table td.negative { color: var(--negative); }
+.year-table tr.dim td { color: var(--muted); }
+
+/* ===== Importador CSV ===== */
+.csv-mapper { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.75rem; }
+.csv-selects { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.5rem; }
+.csv-selects label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.78rem; color: var(--text-2); }
+
+/* ===== Varios ===== */
+.check-label { flex-direction: row !important; align-items: center; gap: 0.5rem !important; }
+.check-label input { width: auto; }
+.type-btn.type-transfer.active { background: var(--text-2); color: var(--surface); font-weight: 700; }
+.type-btn.type-invest.active { background: var(--positive); color: #fff; font-weight: 700; }
+.tx-amount.transfer { color: var(--text-2); }
+.account-item.total {
+  background: var(--grad-hero);
+  box-shadow: var(--glow-accent);
+  grid-column: 1 / -1;
+}
+.account-item.total .name { color: rgba(255, 255, 255, 0.85); }
+.account-item.total .balance { font-size: 1.15rem; color: #fff; }
+.account-item.total .tx-icon { background: rgba(255, 255, 255, 0.18); color: #fff; }
+
+/* ===== Cuentas ===== */
+.account-list {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem;
+}
+.account-item {
+  display: flex; align-items: center; gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  background: var(--surface-2);
+  border: none; border-radius: 16px;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+.account-item:hover { transform: translateY(-2px); box-shadow: var(--shadow-card); }
+.account-item.total:hover { box-shadow: var(--glow-accent); }
+.account-item .tx-icon { font-size: 1.15rem; width: 38px; height: 38px; }
+.account-item .info { flex: 1; min-width: 0; }
+.account-item .name { font-size: 0.78rem; color: var(--text-2); font-weight: 600; }
+.account-item .balance { font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.account-item .apy-note { font-size: 0.68rem; color: var(--positive); font-variant-numeric: tabular-nums; }
+.account-item .icon-btn { opacity: 0.55; }
+.account-item:hover .icon-btn { opacity: 1; }
+
+/* ===== Presupuestos ===== */
+.budget-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.8rem; }
+.budget-item .row {
+  display: flex; align-items: baseline; gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.35rem;
+}
+.budget-item .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.budget-item .nums { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.budget-item .pct { font-weight: 800; font-variant-numeric: tabular-nums; width: 3.2em; text-align: right; }
+.budget-item .pct.warning { color: #b97e00; }
+:root[data-theme="dark"] .budget-item .pct.warning { color: var(--status-warning); }
+.budget-item .pct.critical { color: var(--status-critical); }
+.budget-track {
+  height: 10px; border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 8%, var(--surface-2));
+  overflow: hidden; box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.budget-fill {
+  height: 100%; border-radius: 999px;
+  background-color: var(--status-good);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 60%);
+  box-shadow: 0 1px 4px -1px color-mix(in srgb, var(--status-good) 60%, transparent);
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.budget-fill.warning { background-color: var(--status-warning); box-shadow: 0 1px 4px -1px color-mix(in srgb, var(--status-warning) 60%, transparent); }
+.budget-fill.critical { background-color: var(--status-critical); box-shadow: 0 1px 4px -1px color-mix(in srgb, var(--status-critical) 60%, transparent); }
+.budget-fill.goal-fill { background-color: var(--accent); background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 60%), var(--grad-accent); box-shadow: var(--glow-accent); }
+.budget-item .row .tx-actions { opacity: 0.55; }
+.budget-item:hover .row .tx-actions { opacity: 1; }
+
+/* ===== Recurrentes ===== */
+.rec-list { list-style: none; margin: 0.5rem 0 0; padding: 0; }
+.rec-item {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.55rem 0.2rem; border-bottom: 1px solid var(--grid);
+}
+.rec-item:last-child { border-bottom: none; }
+.rec-item .info { flex: 1; min-width: 0; }
+.rec-item .what { font-size: 0.9rem; font-weight: 600; }
+.rec-item .when { font-size: 0.78rem; color: var(--muted); }
+.rec-item.inactive { opacity: 0.5; }
+.rec-item .tx-amount { font-size: 0.9rem; }
+
+/* ===== Lista de movimientos ===== */
+.tx-list { list-style: none; margin: 0; padding: 0; }
+.tx-date-header {
+  font-size: 0.72rem; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.07em;
+  padding: 0.8rem 0 0.35rem; border-bottom: none;
+}
+.tx-item {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.5rem 0.4rem;
+  border-bottom: none;
+  border-radius: 14px;
+}
+.tx-item:hover { background: var(--surface-2); }
+.tx-icon {
+  font-size: 1.15rem; flex: none;
+  width: 42px; height: 42px; border-radius: 50%;
+  background: var(--surface-2);
+  display: grid; place-items: center;
+  transition: transform 0.12s ease;
+}
+.tx-item:hover .tx-icon { transform: scale(1.08); }
+.tx-info { flex: 1; min-width: 0; }
+.tx-cat { font-size: 0.9rem; font-weight: 600; }
+.tx-note { font-size: 0.8rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tx-amount { font-variant-numeric: tabular-nums; font-weight: 800; white-space: nowrap; letter-spacing: -0.01em; }
+.tx-amount.ingreso { color: var(--positive); }
+.tx-actions { display: flex; gap: 0.1rem; opacity: 0.55; }
+.tx-item:hover .tx-actions { opacity: 1; }
+
+/* Hover suave en filas de lista (mismo tacto que los movimientos). */
+.inv-item, .rec-item, .cat-item { border-radius: 10px; transition: background 0.12s; }
+.inv-item:hover, .rec-item:hover, .cat-item:hover {
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+}
+
+/* ===== Filtros ===== */
+.filters { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.filters input[type="search"] { flex: 1; min-width: 140px; }
+.filter-totals { font-size: 0.85rem; color: var(--text-2); display: flex; gap: 1rem; flex-wrap: wrap; }
+.filter-totals b { font-variant-numeric: tabular-nums; }
+
+/* ===== Categorías ===== */
+.section-head { display: flex; align-items: center; justify-content: space-between; }
+.cat-list { list-style: none; margin: 0; padding: 0; }
+.cat-item {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.55rem 0.2rem; border-bottom: 1px solid var(--grid);
+}
+.cat-item:last-child { border-bottom: none; }
+.cat-item .name { flex: 1; font-weight: 600; }
+.cat-item .count { color: var(--muted); font-size: 0.8rem; }
+.cat-item.archived { opacity: 0.5; }
+.swatch { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+
+/* ===== FAB ===== */
+.fab {
+  position: fixed; right: 1.25rem; z-index: 20;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  width: 60px; height: 60px; border-radius: 50%;
+  border: none; cursor: pointer;
+  background: var(--grad-accent); color: #fff;
+  font-size: 2rem; line-height: 1;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 45%, transparent);
+  transition: transform 0.12s, filter 0.12s;
+}
+.fab:hover { filter: brightness(1.08); transform: translateY(-2px) scale(1.03); }
+.fab:active { transform: translateY(0) scale(0.94); }
+
+/* Aviso de modo offline: píldora flotante abajo a la izquierda, fuera del
+   alcance del FAB (que vive abajo a la derecha). */
+.offline-bar {
+  position: fixed; left: 1.25rem; z-index: 20;
+  bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  max-width: calc(100% - 6.5rem);
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  background: var(--status-warning);
+  color: #241a00;
+  font-size: 0.8rem; font-weight: 600;
+  box-shadow: var(--shadow-pop);
+}
+
+/* ===== Modales ===== */
+dialog {
+  border: none;
+  border-radius: 24px;
+  background-color: var(--surface);
+  background-image: var(--sheen);
+  color: var(--text);
+  box-shadow: var(--shadow-pop), var(--hairline);
+  padding: 1.4rem;
+  width: min(92vw, 380px);
+}
+dialog::backdrop {
+  background: rgba(10, 8, 20, 0.55);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+dialog h3 {
+  margin-top: 0; color: var(--text);
+  font-size: 1.05rem; font-weight: 800; letter-spacing: -0.01em;
+  text-transform: none;
+}
+dialog form { display: flex; flex-direction: column; gap: 0.8rem; }
+dialog label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.85rem; color: var(--text-2); }
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.25rem; }
+
+.type-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+/* Los modificadores DEBEN ir después de `.type-toggle`: misma especificidad,
+   así que si se declaran antes (como estaban) gana el de 2 columnas y el modal
+   de movimiento salía "Gasto | Ingreso" con "Transf." descolgado debajo. */
+.type-toggle-3 { grid-template-columns: 1fr 1fr 1fr; }
+.type-toggle-2x2 { grid-template-columns: 1fr 1fr; }
+.type-btn {
+  font: inherit; font-weight: 600; padding: 0.55rem; cursor: pointer;
+  border: none; border-radius: 12px;
+  background: var(--surface-2); color: var(--text-2);
+  transition: background 0.12s, color 0.12s, transform 0.1s;
+}
+.type-btn:active { transform: scale(0.96); }
+.type-btn.type-gasto.active { background: var(--gasto); color: #fff; font-weight: 700; }
+.type-btn.type-ingreso.active { background: var(--ingreso); color: #fff; font-weight: 700; }
+
+.swatches { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.swatches button {
+  width: 30px; height: 30px; border-radius: 10px; cursor: pointer;
+  border: 2px solid transparent;
+}
+.swatches button.active { border-color: var(--text); }
+
+/* ===== Ajustes ===== */
+.copy-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 1rem; }
+
+/* ===== Análisis del mes (ritmo, heatmap, día de la semana) ===== */
+.chart-box-short { height: 190px; }
+.chart-box-weekday { height: 110px; margin-top: 0.75rem; }
+.chart-box-catdetail { height: 150px; margin-bottom: 0.75rem; }
+
+.heatmap {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+}
+.hm-head {
+  font-size: 0.65rem; font-weight: 700; color: var(--muted);
+  text-align: center; padding-bottom: 2px;
+}
+.hm-cell {
+  aspect-ratio: 1; border-radius: 8px;
+  background: var(--surface-2);
+  display: grid; place-items: center;
+  font-size: 0.62rem; font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  transition: transform 0.1s ease;
+}
+.hm-cell.spent:hover { transform: scale(1.14); }
+.hm-cell.empty { background: transparent; }
+.hm-cell.future { opacity: 0.35; }
+.hm-cell.spent { color: #fff; font-weight: 600; }
+
+/* ===== Insights de cierre de mes ===== */
+.insights-list { list-style: none; margin: 0; padding: 0; }
+.insights-list li { padding: 0.3rem 0; font-size: 0.9rem; }
+.insights-list b { font-variant-numeric: tabular-nums; }
+
+/* ===== Plantillas rápidas ===== */
+.template-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.template-chip {
+  display: inline-flex; align-items: center; gap: 0.15rem;
+  background: var(--surface-2); border-radius: 999px; padding: 0.15rem 0.3rem 0.15rem 0.15rem;
+}
+.template-chip .apply {
+  border: none; background: none; color: var(--text); cursor: pointer;
+  font: inherit; font-size: 0.8rem; font-weight: 600; padding: 0.25rem 0.3rem;
+  border-radius: 999px;
+}
+.template-chip .del {
+  border: none; background: none; color: var(--muted); cursor: pointer;
+  font-size: 0.75rem; padding: 0.15rem 0.3rem; border-radius: 999px;
+}
+.template-chip .del:hover { color: var(--negative); }
+
+/* ===== Filtros de importe y etiquetas ===== */
+.filter-amount { width: 92px; }
+.tag-chip {
+  display: inline-block; font-size: 0.68rem; font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent); border-radius: 999px; padding: 0.05rem 0.5rem;
+  margin-left: 0.3rem; vertical-align: middle;
+}
+
+/* ===== Modo privacidad (importes difuminados) ===== */
+.privacy .tx-amount, .privacy .stat-value, .privacy .mini-value,
+.privacy .balance, .privacy .cat-legend .val, .privacy .budget-item .nums,
+.privacy .year-table td:not(:first-child), .privacy .inv-item .value,
+.privacy .inv-item .gain, .privacy .filter-totals b, .privacy .apy-note,
+.privacy .chart-box, .privacy .hm-cell, .privacy .insights-list b {
+  filter: blur(7px);
+}
+
+/* ===== Sugerencias y operaciones ===== */
+.dialog-wide { width: min(94vw, 540px); }
+.catdetail-subtitle { margin-top: 1rem; }
+.ops-form { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.ops-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+.reconcile-row { margin: 0; }
+.inv-spark { width: 96px; height: 34px; flex: none; }
+.inv-spark canvas { width: 100% !important; height: 100% !important; }
+.goal-monthly { font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ===== Móvil ===== */
+@media (max-width: 720px) {
+  .topbar { flex-wrap: wrap; padding-bottom: 0.4rem; gap: 0.4rem; }
+  .topbar-title { flex: 1; }
+
+  /* Las pestañas ocupan SU PROPIA fila completa.
+     Ojo: no basta con `width: 100%` — el `flex: 1` de la regla base fija
+     `flex-basis: 0`, que gana al ancho y dejaba la barra en una tira de ~113px
+     con 681px de contenido dentro (una pestaña visible de siete). Hace falta
+     anular el flex con `flex: 0 0 100%`. */
+  .tabs {
+    order: 3;
+    flex: 0 0 100%;
+    justify-content: flex-start;
+    /* Sangra hasta los bordes de la pantalla: se desliza más natural. */
+    margin-inline: -1rem;
+    padding-inline: 1rem;
+    padding-block: 0.15rem;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 1rem;
+    /* Difuminado en los extremos: pista visual de que hay más secciones. */
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 1rem, #000 calc(100% - 1.5rem), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 1rem, #000 calc(100% - 1.5rem), transparent 100%);
+  }
+  .tab {
+    scroll-snap-align: center;
+    flex: none;
+    min-height: 44px;            /* mínimo táctil de Apple */
+    padding: 0.5rem 0.9rem;
+    font-size: 0.9rem;
+  }
+
+  /* Zonas táctiles: 44px es el mínimo cómodo con el pulgar. */
+  .icon-btn {
+    min-width: 44px; min-height: 44px;
+    display: inline-grid; place-items: center;
+    padding: 0.35rem;
+  }
+  .month-nav .icon-btn { width: 44px; height: 44px; }
+  .tx-actions .icon-btn { min-width: 42px; min-height: 42px; font-size: 1.05rem; }
+
+  .card-grid { grid-template-columns: 1fr; }
+  .stat-row { grid-template-columns: 1fr 1fr; }
+  .stat-row .stat-tile:last-child { grid-column: 1 / -1; }
+  .stat-value { font-size: 1.4rem; }
+  .donut-layout { flex-direction: column; align-items: stretch; }
+  .chart-box-donut { flex: none; }
+  .month-nav h2 { min-width: 0; flex: 1; }
+  .tx-icon { width: 38px; height: 38px; }
+  .inv-spark { display: none; }
+
+  /* Movimientos: los filtros en rejilla de 2, no en flujo irregular. */
+  .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .filters > * { min-width: 0; }
+  /* Los desplegables largos ocupan la fila entera (si no, se cortan los textos);
+     mín y máx caen juntos en la suya, que es como se leen. */
+  .filters #f-category,
+  .filters #f-account,
+  .filters input[type="search"] { grid-column: 1 / -1; }
+  .filter-totals { gap: 0.25rem 1rem; }
+
+  /* Una cuenta por fila: en dos columnas el saldo y la TAE se partían. */
+  .account-list { grid-template-columns: 1fr; }
+  .account-item { padding: 0.8rem 0.9rem; }
+
+  /* Filas de movimiento más altas: más fáciles de acertar y de deslizar. */
+  .tx-item { padding: 0.6rem 0.5rem; }
+
+  /* Botones secundarios ("+ Añadir", "Copiar"…): 25px era muy poco para el dedo. */
+  .btn-small { min-height: 38px; padding-inline: 0.85rem; }
+
+  /* Modales: botones y campos con altura de dedo. */
+  .type-btn { min-height: 44px; }
+  dialog .modal-actions .btn { min-height: 44px; padding-inline: 1rem; }
+  dialog input, dialog select { min-height: 44px; }
+
+  /* Swipe: en móvil las acciones de un movimiento se revelan deslizando a la izquierda. */
+  .tx-item { position: relative; overflow: hidden; }
+  .tx-item .tx-actions {
+    position: absolute; right: 0.3rem; top: 50%;
+    transform: translate(110%, -50%);
+    transition: transform 0.18s ease;
+    background: var(--surface-2); border-radius: 999px; padding: 0.15rem 0.3rem;
+    opacity: 1;
+  }
+  .tx-item.swiped .tx-actions { transform: translate(0, -50%); }
+}

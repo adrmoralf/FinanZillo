@@ -1,0 +1,8 @@
+node_modules/
+data/
+.env
+
+# Notas y herramientas locales de desarrollo: no forman parte de la app
+boveda/
+CLAUDE.md
+.claude/
