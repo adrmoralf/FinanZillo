@@ -1,0 +1,14 @@
+# Compilados e instalador generado
+desktop/target/
+
+# Datos: nunca en el repositorio (van en %APPDATA%\FinanZillo o donde elijas)
+*.fzl
+*.fzl.tmp
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.csv
+data/
+.env
+certs/

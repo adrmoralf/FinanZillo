@@ -1,0 +1,22 @@
+name: Comprobar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pruebas
+        run: cargo test --locked
+      - name: Compilación de release
+        run: cargo build --release --locked

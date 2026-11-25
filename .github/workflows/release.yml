@@ -1,0 +1,53 @@
+name: Release
+
+# Al subir una etiqueta vX.Y.Z se compila, se prueba, se genera el instalador
+# con esa versión y se publica la release con el instalador y su SHA-256.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versión desde la etiqueta
+        id: v
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Pruebas
+        working-directory: desktop
+        run: cargo test --locked
+
+      - name: Compilar
+        working-directory: desktop
+        run: cargo build --release --locked
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup --no-progress -y }
+
+      - name: Instalador
+        working-directory: desktop
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.v.outputs.version }}" installer\finanzillo.iss
+          $f = Get-ChildItem target\instalador\*.exe | Select-Object -First 1
+          $h = (Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower()
+          "$h  $($f.Name)" | Out-File -Encoding ascii "target\instalador\SHA256SUMS.txt"
+
+      - name: Publicar la release
+        working-directory: desktop
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" target/instalador/*.exe target/instalador/SHA256SUMS.txt \
+            --title "FinanZillo $GITHUB_REF_NAME" \
+            --notes "Instalador para Windows 10/11 (x64). Comprueba la suma con SHA256SUMS.txt. Windows puede avisar con SmartScreen la primera vez porque el instalador no está firmado: «Más información» → «Ejecutar de todas formas»."
