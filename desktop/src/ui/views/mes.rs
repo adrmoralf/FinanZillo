@@ -1,7 +1,7 @@
-//! Mes: saldo enorme, apunte rápido, pulso de 12 meses, calendario, últimos
+//! Mes: saldo enorme, gastos rápidos, anillos por categoría, pulso de 12 meses, calendario, últimos
 //! movimientos; a la derecha, cuentas, patrimonio y presupuestos.
 
-use egui::{Align, Key, Layout, RichText, Ui, vec2};
+use egui::{Align, Layout, RichText, Ui, vec2};
 use egui_phosphor::light as ic;
 
 use super::movimientos::{RowAction, tx_row};
@@ -56,7 +56,7 @@ fn center(ws: &mut Workspace, ui: &mut Ui) {
             if w::button(ui, Some(ic::ARROWS_LEFT_RIGHT), "Transferencia", Kind::Secondary).on_hover_text("Ctrl+T").clicked() {
                 ws.modal = Modal::new_transfer();
             }
-            if w::button(ui, Some(ic::PLUS), "Movimiento", Kind::Secondary).on_hover_text("Todos los campos · Ctrl+Mayús+N").clicked() {
+            if w::button(ui, Some(ic::PLUS), "Movimiento", Kind::Secondary).on_hover_text("Ctrl+N").clicked() {
                 ws.modal = Modal::new_tx(&ws.core);
             }
         });
@@ -109,10 +109,12 @@ fn center(ws: &mut Workspace, ui: &mut Ui) {
     });
     ui.add_space(14.0);
 
-    quick_entry(ws, ui);
-    ui.add_space(8.0);
     templates_row(ws, ui);
-    ui.add_space(16.0);
+    ui.add_space(18.0);
+
+    // Anillos: en qué se fue el dinero y de dónde vino.
+    category_rings(ws, ui);
+    ui.add_space(18.0);
 
     // El pulso de 12 meses es la firma de la pantalla: todo el ancho de la columna.
     ui.horizontal(|ui| {
@@ -144,7 +146,7 @@ fn center(ws: &mut Workspace, ui: &mut Ui) {
     let recent = ws.core.recent(8);
     ui.spacing_mut().item_spacing.y = 2.0;
     if recent.is_empty() {
-        w::empty_state(ui, ic::RECEIPT, "Aún no hay movimientos", "Escribe un importe arriba y pulsa Enter para apuntar el primero.");
+        w::empty_state(ui, ic::RECEIPT, "Aún no hay movimientos", "Pulsa Ctrl+N o «Movimiento» para apuntar el primero.");
     }
     for t in &recent {
         match tx_row(ws, ui, t, true) {
@@ -184,111 +186,126 @@ fn kv(ui: &mut Ui, label: &str, value: String, color: egui::Color32, sub: Option
     });
 }
 
-/// Línea de apunte rápido: importe, concepto, categoría, cuenta y Enter.
-fn quick_entry(ws: &mut Workspace, ui: &mut Ui) {
-    let pal = p();
-    let ty = if ws.quick.ingreso { "ingreso" } else { "gasto" };
-    let cats = ws.active_categories(ty);
-    let accounts = ws.account_names();
-    let mut submit = false;
-    let frame = egui::Frame::new()
-        .fill(pal.surface)
-        .stroke(egui::Stroke::new(1.0, pal.line_strong))
-        .corner_radius(w::R2)
-        .inner_margin(egui::Margin::symmetric(10, 8));
-    frame.show(ui, |ui| {
-        ui.set_width(ui.available_width());
-        ui.horizontal(|ui| {
-            ui.label(w::caps("Apuntar hoy · Ctrl+N · Enter guarda"));
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let mut idx = ws.quick.ingreso as usize;
-                // El orden se invierte al pintar de derecha a izquierda.
-                let mut rev = 1 - idx;
-                if w::segmented(ui, &mut rev, &["Ingreso", "Gasto"]) {
-                    idx = 1 - rev;
-                    ws.quick.ingreso = idx == 1;
-                    ws.quick.cat = None;
-                }
-            });
-        });
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            let amt = w::mono_field(ui, &mut ws.quick.amount, "0,00 €", 104.0);
-            if ws.quick.focus {
-                amt.request_focus();
-                ws.quick.focus = false;
+/// Dos anillos lado a lado: gasto e ingreso del mes por categoría, con su
+/// leyenda (las 7 mayores y «Otras»). Pasar por una porción o una línea de la
+/// leyenda la resalta; clic → ficha de la categoría.
+fn category_rings(ws: &mut Workspace, ui: &mut Ui) {
+    let s = ws.cache.summary.clone();
+    let privacy = ws.privacy;
+    ui.label(w::caps("Gastos e ingresos por categoría"));
+    w::hline(ui);
+    ui.add_space(10.0);
+    let gap = 28.0;
+    let col_w = ((ui.available_width() - gap) / 2.0).floor();
+    let mut open: Option<i64> = None;
+    ui.horizontal_top(|ui| {
+        let sp = ui.spacing().item_spacing.x;
+        for (i, (title, cats, total, word)) in [
+            ("Gastos", &s.by_category, s.gastos_cents, "gastado"),
+            ("Ingresos", &s.by_category_ingreso, s.ingresos_cents, "ingresado"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if i == 1 {
+                ui.add_space(gap - sp);
             }
-            // Concepto: el ancho que sobra tras los campos fijos.
-            let fixed = 170.0 + 124.0 + 112.0 + 4.0 * ui.spacing().item_spacing.x + 4.0;
-            let note_w = (ui.available_width() - fixed).max(120.0);
-            let note = w::text_field(ui, &mut ws.quick.note, "Concepto (supermercado, nómina…)", note_w);
-            if note.changed() {
-                // Al escribir un concepto conocido se propone su categoría y su cuenta.
-                if let Some((cat, acc)) = ws.core.guess_from_note(&ws.quick.note, ty) {
-                    if ws.quick.cat.is_none() || ws.quick.cat_from_guess {
-                        ws.quick.cat = cat;
-                        ws.quick.cat_from_guess = true;
-                    }
-                    if !acc.is_empty() {
-                        ws.quick.account = acc;
-                    }
-                }
-            }
-            let mut cat = ws.quick.cat;
-            let cat_pick = w::search_select(ui, "quick_cat", &mut cat, &cats, 150.0, "Categoría…");
-            if cat != ws.quick.cat {
-                ws.quick.cat = cat;
-                ws.quick.cat_from_guess = false;
-            }
-            let mut acc_opts: Vec<(String, String)> = accounts.iter().map(|a| (a.clone(), a.clone())).collect();
-            if acc_opts.is_empty() {
-                acc_opts.push((String::new(), "Sin cuenta".into()));
-            }
-            let mut acc = ws.quick.account.clone();
-            let acc_pick = w::search_select(ui, "quick_acc", &mut acc, &acc_opts, 104.0, "Cuenta");
-            ws.quick.account = acc;
-            if cat_pick.enter || acc_pick.enter {
-                submit = true;
-            }
-            if w::button_ex(ui, Some(ic::KEY_RETURN), "Apuntar", Kind::Primary, true, true).on_hover_text("Enter").clicked() {
-                submit = true;
-            }
-            let enter = ui.input(|i| i.key_pressed(Key::Enter));
-            if enter && (amt.lost_focus() || note.lost_focus()) {
-                submit = true;
-            }
-        });
-        // Sugerencias de concepto.
-        let sugg = ws.core.note_suggestions(&ws.quick.note, ty, 5);
-        let show_sugg = !sugg.is_empty() && !(sugg.len() == 1 && sugg[0].eq_ignore_ascii_case(ws.quick.note.trim()));
-        if show_sugg || !ws.quick.error.is_empty() {
-            ui.horizontal(|ui| {
-                if !ws.quick.error.is_empty() {
-                    ui.label(RichText::new(&ws.quick.error).color(pal.critical));
-                }
-                if show_sugg {
-                    ui.label(RichText::new("¿Quisiste decir?").font(theme::ui_font(12.0)).color(pal.muted));
-                    for sgt in sugg {
-                        if w::button(ui, None, &sgt, Kind::Ghost).clicked() {
-                            ws.quick.note = sgt.clone();
-                            if let Some((cat, acc)) = ws.core.guess_from_note(&sgt, ty) {
-                                ws.quick.cat = cat;
-                                ws.quick.cat_from_guess = true;
-                                if !acc.is_empty() {
-                                    ws.quick.account = acc;
-                                }
-                            }
-                            ws.quick.focus = true;
-                        }
-                    }
+            ui.allocate_ui_with_layout(vec2(col_w, 10.0), Layout::top_down(Align::Min), |ui| {
+                ui.set_width(col_w);
+                if let Some(id) = ring_panel(ui, title, cats, total, word, privacy) {
+                    open = Some(id);
                 }
             });
         }
     });
-    if submit {
-        ws.quick.error.clear();
-        ws.quick_submit();
+    if let Some(id) = open {
+        ws.modal = Modal::CategoryDetail { id, month: ws.month.clone() };
     }
+}
+
+fn ring_panel(ui: &mut Ui, title: &str, cats: &[crate::ledger::analysis::CatTotal], total: i64, word: &str, privacy: bool) -> Option<i64> {
+    let pal = p();
+    let accent = if title == "Gastos" { pal.gasto } else { pal.ingreso };
+    ui.horizontal(|ui| {
+        w::color_strip(ui, accent, vec2(4.0, 14.0));
+        ui.label(RichText::new(title).font(theme::medium(15.0)).color(pal.ink));
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.label(RichText::new(w::hide(util::eur(total), privacy)).font(theme::mono_bold(15.0)).color(accent));
+        });
+    });
+    ui.add_space(8.0);
+    // Las 7 mayores y el resto junto en «Otras».
+    let mut rows: Vec<(Option<i64>, String, egui::Color32, i64)> =
+        cats.iter().take(7).map(|c| (c.id, c.name.clone(), theme::cat_color_for(c.id, &c.color), c.total_cents)).collect();
+    let rest: i64 = cats.iter().skip(7).map(|c| c.total_cents).sum();
+    if rest > 0 {
+        rows.push((None, format!("Otras ({})", cats.len() - 7), pal.muted, rest));
+    }
+    if rows.is_empty() {
+        ui.add_space(30.0);
+        ui.vertical_centered(|ui| {
+            ui.label(RichText::new(if title == "Gastos" { "Sin gastos este mes" } else { "Sin ingresos este mes" }).color(pal.muted));
+        });
+        ui.add_space(30.0);
+        return None;
+    }
+    let sum: i64 = rows.iter().map(|r| r.3).sum();
+    let slices: Vec<charts::Slice> = rows
+        .iter()
+        .map(|(_, n, c, v)| charts::Slice {
+            color: *c,
+            value: *v,
+            big: w::hide(util::eur(*v), privacy),
+            small: format!("{} · {}%", trunc(n, 12), util::pct(*v, sum)),
+        })
+        .collect();
+    // La leyenda resalta el anillo con la línea bajo el ratón del frame anterior.
+    let mem = ui.id().with(("ring_focus", title));
+    let focus: Option<usize> = ui.data(|d| d.get_temp(mem)).flatten();
+    let mut new_focus = None;
+    let mut clicked = None;
+    let size = (ui.available_width() * 0.36).clamp(132.0, 176.0);
+    ui.horizontal_top(|ui| {
+        let (hov, clk) = charts::donut(ui, &slices, size, (&w::hide(util::eur(total), privacy), word), focus);
+        if hov.is_some() {
+            new_focus = hov;
+        }
+        clicked = clk;
+        ui.add_space(18.0);
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.spacing_mut().interact_size.y = 16.0;
+            for (i, (id, name, col, v)) in rows.iter().enumerate() {
+                let lit = focus == Some(i);
+                let (resp, _) = w::row_frame(ui, lit, |ui| {
+                    ui.horizontal(|ui| {
+                        w::color_strip(ui, *col, vec2(10.0, 10.0));
+                        ui.add(egui::Label::new(RichText::new(name).font(theme::ui_font(13.0)).color(pal.ink)).truncate().selectable(false));
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            ui.add_sized(vec2(34.0, 16.0), egui::Label::new(RichText::new(format!("{}%", util::pct(*v, sum))).font(theme::mono(11.5)).color(pal.muted)));
+                            ui.label(RichText::new(w::hide(util::fmt_num(*v), privacy)).font(theme::mono(12.5)).color(pal.ink));
+                        });
+                    });
+                });
+                if resp.hovered() {
+                    new_focus = Some(i);
+                }
+                if resp.clicked() {
+                    clicked = Some(i);
+                }
+                let _ = id;
+            }
+        });
+    });
+    ui.data_mut(|d| d.insert_temp(mem, new_focus));
+    if new_focus != focus {
+        ui.ctx().request_repaint();
+    }
+    clicked.and_then(|i| rows[i].0)
+}
+
+fn trunc(s: &str, n: usize) -> String {
+    if s.chars().count() <= n { s.to_string() } else { format!("{}…", s.chars().take(n - 1).collect::<String>()) }
 }
 
 /// Gastos rápidos: un clic apunta el gasto hoy.
@@ -405,33 +422,6 @@ fn side(ws: &mut Workspace, ui: &mut Ui) {
     }
     ui.add_space(18.0);
 
-    // Tira de códigos: reparto del gasto del mes por categoría.
-    if !s.by_category.is_empty() {
-        ui.label(w::caps("En qué se va"));
-        ui.add_space(4.0);
-        let parts: Vec<(egui::Color32, i64)> = s.by_category.iter().map(|c| (theme::cat_color_for(c.id, &c.color), c.total_cents)).collect();
-        charts::category_strip(ui, &parts, 12.0);
-        ui.add_space(6.0);
-        ui.spacing_mut().item_spacing.y = 0.0;
-        for c in s.by_category.iter().take(5) {
-            let (resp, _) = w::row_frame(ui, false, |ui| {
-                ui.horizontal(|ui| {
-                    w::color_strip(ui, theme::cat_color_for(c.id, &c.color), vec2(10.0, 10.0));
-                    ui.label(RichText::new(&c.name).font(theme::ui_font(13.0)));
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        ui.label(RichText::new(format!("{}%", util::pct(c.total_cents, s.gastos_cents))).font(theme::mono(11.5)).color(pal.muted));
-                        ui.label(RichText::new(w::hide(util::fmt_num(c.total_cents), privacy)).font(theme::mono(12.5)));
-                    });
-                });
-            });
-            if let Some(id) = c.id {
-                if resp.on_hover_text("Ver la ficha de la categoría").clicked() {
-                    ws.modal = Modal::CategoryDetail { id, month: ws.month.clone() };
-                }
-            }
-        }
-    }
-    ui.add_space(18.0);
     // Calendario del mes e ideas automáticas.
     ui.label(w::caps("Calendario"));
     ui.add_space(4.0);

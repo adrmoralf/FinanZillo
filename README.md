@@ -13,7 +13,7 @@
   <a href="https://github.com/adrmoralf/FinanZillo/releases/latest"><b>⬇ Descargar para Windows</b></a>
 </p>
 
-![Pantalla del mes: saldo del mes en grande, apunte rápido, el pulso de gasto de 12 meses y, a la derecha, cuentas, patrimonio y presupuestos](docs/capturas/mes.png)
+![Pantalla del mes: saldo del mes en grande, anillos de gastos e ingresos por categoría, el pulso de gasto de 12 meses y, a la derecha, cuentas, patrimonio y presupuestos](docs/capturas/mes.png)
 
 > Las capturas usan **datos ficticios** generados con `finanzillo --demo`. Ningún dato es real.
 
@@ -21,8 +21,8 @@
 
 FinanZillo es una app de finanzas personales hecha para usarse a diario: apuntas un gasto en segundos con el teclado y ves de un vistazo cómo va el mes, en qué se va el dinero y cuánto patrimonio tienes. Todo se guarda en tu PC, en **un único archivo cifrado con tu contraseña**. No hay servidor, ni registro, ni sincronización con nadie.
 
-- **Apuntar sin ratón**: `Ctrl+N`, escribes el importe, Tab, el concepto (si ya lo usaste, propone categoría y cuenta), Tab, las primeras letras de la categoría, y Enter. Con «Deshacer» por si acaso. El importe admite cuentas: `12,50+3*2`.
-- **El mes de un vistazo**: saldo del mes, proyección al cierre, media diaria, días sin gastar y el **pulso**: el gasto diario de los últimos 12 meses dibujado como líneas apiladas (clic en una línea para ir a ese mes).
+- **Apuntar en segundos**: `Ctrl+N` abre el movimiento con el importe en grande; escribes el concepto (si ya lo usaste, propone categoría y cuenta), eliges la categoría con un clic o tecleando sus primeras letras y `Ctrl+Enter`. Con «Deshacer» por si acaso. El importe admite cuentas: `12,50+3*2`.
+- **El mes de un vistazo**: saldo del mes, proyección al cierre, media diaria, días sin gastar, **anillos de gastos e ingresos por categoría** (pasa el ratón para resaltar, clic para ver la categoría) y el **pulso**: el gasto diario de los últimos 12 meses dibujado como líneas apiladas (clic en una línea para ir a ese mes).
 - **Cuentas que cuadran con el banco**: saldo inicial por cuenta, transferencias, ajuste para cuadrar con el saldo real y **cuentas remuneradas con TAE**: el interés se calcula a diario y el último día de cada mes se apunta como ingreso (editable si el banco pagó otra cifra).
 - **Presupuestos** por categoría y total, con historial por mes y el **ritmo de gasto** frente al mes anterior.
 - **Recurrentes**: nómina, alquiler, suscripciones, traspasos y aportaciones a inversiones se apuntan solos cada mes. Detecta pagos repetidos que parecen suscripciones.
@@ -43,6 +43,8 @@ FinanZillo es una app de finanzas personales hecha para usarse a diario: apuntas
 | **Informe** del mes con conclusiones, exportable a PDF. | **Año**: mes a mes y en qué se fue el dinero. |
 | ![Inversiones](docs/capturas/inversiones.png) | ![Tema claro](docs/capturas/mes-claro.png) |
 | **Inversiones** con su línea de 30 días. | **Tema claro**. |
+| ![Nuevo movimiento](docs/capturas/mes-nuevo.png) | ![Objetivos de ahorro](docs/capturas/objetivos.png) |
+| **Nuevo movimiento** (`Ctrl+N`): importe grande, categorías con su color. | **Objetivos** de ahorro con su cuota mensual. |
 
 <p align="center"><img src="docs/capturas/bloqueo.png" width="480" alt="Pantalla de desbloqueo con contraseña"></p>
 
@@ -52,6 +54,7 @@ FinanZillo es una app de finanzas personales hecha para usarse a diario: apuntas
 - **Sin la contraseña no hay recuperación.** Guárdala en un gestor de contraseñas.
 - Se guarda solo (y de forma atómica) y cada día hace una **copia cifrada** en `%APPDATA%\FinanZillo\copias` (las 30 últimas). Puedes añadir una carpeta externa, por ejemplo de OneDrive: las copias siguen cifradas.
 - Se bloquea con `Ctrl+L` y tras 15 minutos sin uso (configurable).
+- **Entrar con el PIN de Windows** (opcional, en Ajustes): Windows Hello (PIN, huella o cara) firma con una clave guardada en el chip de seguridad del equipo y de esa firma sale la clave que abre el archivo. El PIN no se guarda en ningún sitio y la contraseña sigue valiendo siempre.
 - La única conexión a internet es para los **precios de inversiones** que tú añadas (Yahoo Finance o CoinGecko). Sin inversiones con precio en vivo, la app no sale a la red.
 - Lo que **exportas** (CSV, HTML, PDF) no va cifrado: guárdalo donde corresponda.
 
@@ -59,7 +62,7 @@ FinanZillo es una app de finanzas personales hecha para usarse a diario: apuntas
 
 1. Descarga `FinanZillo-X.Y.Z-instalador.exe` de la [última release](https://github.com/adrmoralf/FinanZillo/releases/latest) y, si quieres, comprueba su suma con `SHA256SUMS.txt`.
 2. Ejecútalo. Se instala **solo para tu usuario**, sin permisos de administrador. Como el instalador no está firmado, Windows puede avisar con SmartScreen: «Más información» → «Ejecutar de todas formas».
-3. Al abrir FinanZillo, crea tu contraseña. Puedes empezar de cero, importar un CSV de tu banco (Ajustes) o importar una base de FinanZillo existente.
+3. Al abrir FinanZillo por primera vez, crea tu contraseña: se crea un archivo de datos nuevo y vacío, con unas categorías de partida. Puedes importar un CSV de tu banco (Ajustes) o una base de FinanZillo que ya tuvieras.
 
 Desinstalar no borra tus datos. Requisitos: Windows 10 u 11 de 64 bits.
 
@@ -69,14 +72,14 @@ Desinstalar no borra tus datos. Requisitos: Windows 10 u 11 de 64 bits.
 & "$env:LOCALAPPDATA\Programs\FinanZillo\finanzillo.exe" --demo "$env:TEMP\finanzillo-demo.db"
 ```
 
-Después, en la pantalla de creación, pulsa «Elegir otra base de datos…» y elige ese archivo. Son los mismos datos ficticios de las capturas.
+Después, en la pantalla de creación, pulsa «Importar una base de datos…» y elige ese archivo. Son los mismos datos ficticios de las capturas.
 
 ## Atajos de teclado
 
 | Atajo | Acción |
 |---|---|
-| `Ctrl+N` | Apuntar (línea rápida del mes) · Enter guarda · `+12,50` es un ingreso |
-| `Ctrl+Mayús+N` / `Ctrl+T` | Movimiento con todos los campos / transferencia |
+| `Ctrl+N` · `Ctrl+Enter` | Nuevo movimiento · guardarlo |
+| `Ctrl+T` | Transferencia entre cuentas |
 | `Ctrl+F` | Buscar movimientos |
 | `Alt+←` / `Alt+→` | Mes anterior / siguiente |
 | `Ctrl+1` … `Ctrl+0` | Ir a cada sección |
@@ -105,6 +108,7 @@ Estructura de `desktop/src`:
 | `db.rs` | Esquema SQLite, migraciones, memoria ↔ bytes, importación |
 | `ledger/` | Lógica: movimientos, cuentas e intereses, recurrentes, análisis, inversiones, CSV, informe |
 | `ui/` | Interfaz con [egui](https://github.com/emilk/egui): tema, componentes, gráficas, vistas y diálogos |
+| `hello.rs` | Desbloqueo con el PIN de Windows (Windows Hello) |
 | `demo.rs` | Datos de demostración ficticios |
 
 ## Diseño

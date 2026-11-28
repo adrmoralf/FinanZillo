@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS interest_postings (
 );
 "#;
 
-/// Categorías iniciales (las mismas que la app web).
+/// Categorías iniciales de una base nueva.
 const SEED_CATEGORIES: &[(&str, &str, &str, &str)] = &[
     ("Alimentación", "gasto", "🛒", "#2a78d6"),
     ("Restaurante", "gasto", "🍽️", "#1baf7a"),
@@ -150,7 +150,7 @@ const SEED_CATEGORIES: &[(&str, &str, &str, &str)] = &[
     ("Suscripciones", "gasto", "📺", "#eb6834"),
     ("Viajes", "gasto", "✈️", "#1c5cab"),
     ("Regalos", "gasto", "🎁", "#c98500"),
-    ("Tonterías", "gasto", "🎯", "#e87ba4"),
+    ("Caprichos", "gasto", "🎯", "#e87ba4"),
     ("Desarrollo personal", "gasto", "📚", "#4a3aa7"),
     ("Inversiones", "gasto", "📈", "#008300"),
     ("Otros", "gasto", "📦", "#898781"),
@@ -279,27 +279,11 @@ pub fn import_sqlite_file(path: &Path) -> Result<Connection, String> {
     Ok(dst)
 }
 
-/// Dónde suele estar la base de la app web en este PC.
-/// Dónde suele estar la base de la app web anterior: la carpeta de OneDrive
-/// donde se archivó (`OneDrive/FinanZillo/web-retirada/data`) o un `data/`
-/// junto al directorio actual. Sin rutas personales fijas.
+/// Base SQLite de FinanZillo para importar al crear el archivo: solo si se
+/// indica con `FINANZILLO_IMPORT` (pruebas, demo). La app no busca en
+/// ninguna carpeta: quien la instala nueva empieza de cero.
 pub fn guess_web_db() -> Option<std::path::PathBuf> {
-    use std::path::PathBuf;
-    let archivada = |base: PathBuf| base.join("FinanZillo").join("web-retirada").join("data").join("finanzillo.db");
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Ok(p) = std::env::var("FINANZILLO_IMPORT") {
-        candidates.push(PathBuf::from(p));
-    }
-    if let Ok(od) = std::env::var("OneDrive") {
-        candidates.push(archivada(PathBuf::from(od)));
-    }
-    if let Some(home) = dirs::home_dir() {
-        candidates.push(archivada(home.join("OneDrive")));
-    }
-    let cwd = std::env::current_dir().unwrap_or_default();
-    candidates.push(cwd.join("data").join("finanzillo.db"));
-    candidates.push(cwd.join("..").join("data").join("finanzillo.db"));
-    candidates.into_iter().find(|p| p.is_file())
+    std::env::var("FINANZILLO_IMPORT").ok().map(std::path::PathBuf::from).filter(|p| p.is_file())
 }
 
 #[cfg(test)]

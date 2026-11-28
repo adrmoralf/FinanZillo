@@ -110,7 +110,6 @@ pub fn show(ws: &mut Workspace, ui: &mut Ui) {
             if w::select(ui, "def_acc", &mut def, &opts, 200.0).changed() || def != ws.core.default_account() {
                 let r = ws.core.set_setting("default_account", &def);
                 ws.report(r, None);
-                ws.quick.account = def;
             }
         });
     });

@@ -32,6 +32,9 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
+; Avisa al Explorador al terminar: refresca los iconos en caché (si no, tras
+; cambiar el icono seguía viéndose el antiguo en accesos directos).
+ChangesAssociations=yes
 
 [Languages]
 Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"

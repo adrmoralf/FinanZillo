@@ -66,12 +66,21 @@ fn random_bytes<const N: usize>() -> [u8; N] {
     b
 }
 
+pub(crate) fn random<const N: usize>() -> [u8; N] {
+    random_bytes::<N>()
+}
+
 fn derive_key(password: &str, salt: &[u8; 16], m: u32, t: u32, p: u32) -> Result<Zeroizing<[u8; 32]>, StoreError> {
+    derive_raw(password.as_bytes(), salt, m, t, p)
+}
+
+/// Argon2id sobre bytes cualesquiera (también la firma de Windows Hello).
+pub(crate) fn derive_raw(input: &[u8], salt: &[u8], m: u32, t: u32, p: u32) -> Result<Zeroizing<[u8; 32]>, StoreError> {
     let params = Params::new(m, t, p, Some(32)).map_err(|e| StoreError::Corrupt(e.to_string()))?;
     let argon = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
     let mut key = Zeroizing::new([0u8; 32]);
     argon
-        .hash_password_into(password.as_bytes(), salt, key.as_mut())
+        .hash_password_into(input, salt, key.as_mut())
         .map_err(|e| StoreError::Corrupt(e.to_string()))?;
     Ok(key)
 }
@@ -108,30 +117,62 @@ impl Sealer {
         Ok(out)
     }
 
+    /// Clave y sal actuales (para envolverlas con Windows Hello).
+    pub fn key_material(&self) -> (Zeroizing<[u8; 32]>, [u8; 16]) {
+        (Zeroizing::new(*self.key), self.salt)
+    }
+
     /// Descifra un archivo con la contraseña. Devuelve el sellador (para
     /// guardados posteriores) y la base de datos en claro.
     pub fn open(bytes: &[u8], password: &str) -> Result<(Self, Zeroizing<Vec<u8>>), StoreError> {
-        if bytes.len() < HEADER_LEN + 16 || &bytes[0..4] != MAGIC {
-            return Err(StoreError::Corrupt("no es un archivo de FinanZillo".into()));
-        }
-        if bytes[4] != FORMAT_VERSION {
-            return Err(StoreError::Corrupt(format!("versión de formato {} no soportada", bytes[4])));
-        }
-        let rd = |i: usize| u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
-        let (m, t, p) = (rd(5), rd(9), rd(13));
-        // Límites razonables: un archivo manipulado no puede pedir 100 GB de RAM.
-        if !(8 * 1024..=1024 * 1024).contains(&m) || !(1..=20).contains(&t) || !(1..=8).contains(&p) {
-            return Err(StoreError::Corrupt("parámetros de cifrado fuera de rango".into()));
-        }
-        let salt: [u8; 16] = bytes[17..33].try_into().unwrap();
-        let nonce: [u8; 24] = bytes[33..57].try_into().unwrap();
-        let key = derive_key(password, &salt, m, t, p)?;
+        let h = parse_header(bytes)?;
+        let key = derive_key(password, &h.salt, h.m, h.t, h.p)?;
+        Self::decrypt(bytes, h, key)
+    }
+
+    /// Descifra con la clave ya derivada (desbloqueo con Windows Hello).
+    pub fn open_with_key(bytes: &[u8], key: Zeroizing<[u8; 32]>) -> Result<(Self, Zeroizing<Vec<u8>>), StoreError> {
+        let h = parse_header(bytes)?;
+        Self::decrypt(bytes, h, key)
+    }
+
+    fn decrypt(bytes: &[u8], h: Header, key: Zeroizing<[u8; 32]>) -> Result<(Self, Zeroizing<Vec<u8>>), StoreError> {
         let cipher = XChaCha20Poly1305::new(key.as_ref().into());
         let pt = cipher
-            .decrypt(XNonce::from_slice(&nonce), Payload { msg: &bytes[HEADER_LEN..], aad: &bytes[..HEADER_LEN] })
+            .decrypt(XNonce::from_slice(&h.nonce), Payload { msg: &bytes[HEADER_LEN..], aad: &bytes[..HEADER_LEN] })
             .map_err(|_| StoreError::WrongPassword)?;
-        Ok((Sealer { key, salt, m_cost: m, t_cost: t, p_cost: p }, Zeroizing::new(pt)))
+        Ok((Sealer { key, salt: h.salt, m_cost: h.m, t_cost: h.t, p_cost: h.p }, Zeroizing::new(pt)))
     }
+}
+
+struct Header {
+    m: u32,
+    t: u32,
+    p: u32,
+    salt: [u8; 16],
+    nonce: [u8; 24],
+}
+
+/// Lee y valida la cabecera del archivo.
+fn parse_header(bytes: &[u8]) -> Result<Header, StoreError> {
+    if bytes.len() < HEADER_LEN + 16 || &bytes[0..4] != MAGIC {
+        return Err(StoreError::Corrupt("no es un archivo de FinanZillo".into()));
+    }
+    if bytes[4] != FORMAT_VERSION {
+        return Err(StoreError::Corrupt(format!("versión de formato {} no soportada", bytes[4])));
+    }
+    let rd = |i: usize| u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
+    let (m, t, p) = (rd(5), rd(9), rd(13));
+    // Límites razonables: un archivo manipulado no puede pedir 100 GB de RAM.
+    if !(8 * 1024..=1024 * 1024).contains(&m) || !(1..=20).contains(&t) || !(1..=8).contains(&p) {
+        return Err(StoreError::Corrupt("parámetros de cifrado fuera de rango".into()));
+    }
+    Ok(Header { m, t, p, salt: bytes[17..33].try_into().unwrap(), nonce: bytes[33..57].try_into().unwrap() })
+}
+
+/// Sal del archivo cifrado (sin descifrarlo).
+pub fn file_salt(bytes: &[u8]) -> Option<[u8; 16]> {
+    parse_header(bytes).ok().map(|h| h.salt)
 }
 
 /// Carpeta de datos: %APPDATA%\FinanZillo (o FINANZILLO_DATA_DIR para pruebas).
@@ -217,6 +258,18 @@ pub fn wipe(mut v: Vec<u8>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Lo que usa el PIN de Windows: abrir con la clave ya derivada.
+    #[test]
+    fn abre_con_la_clave() {
+        let s = Sealer::new("contraseña de prueba").unwrap();
+        let sealed = s.seal(b"datos").unwrap();
+        let (key, salt) = s.key_material();
+        assert_eq!(file_salt(&sealed), Some(salt));
+        let (_, plain) = Sealer::open_with_key(&sealed, key).unwrap();
+        assert_eq!(plain.as_slice(), b"datos");
+        assert!(Sealer::open_with_key(&sealed, Zeroizing::new([7u8; 32])).is_err());
+    }
 
     #[test]
     fn ida_y_vuelta() {

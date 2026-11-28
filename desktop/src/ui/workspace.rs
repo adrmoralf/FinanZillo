@@ -13,7 +13,7 @@ use super::widgets::{self as w, Kind, Toast};
 use crate::ledger::accounts::{Account, NetPoint};
 use crate::ledger::analysis::{MonthTotals, PulseLine, Summary};
 use crate::ledger::investments::{Portfolio, PriceResult, SymbolHit};
-use crate::ledger::{Category, Core, Template, TxInput};
+use crate::ledger::{Category, Core, Template};
 use crate::store::{self, Sealer};
 use crate::{db, util};
 
@@ -58,19 +58,6 @@ pub struct Cache {
     pub networth: Option<(u64, Vec<NetPoint>)>,
 }
 
-/// Línea de apunte rápido.
-#[derive(Default)]
-pub struct Quick {
-    pub amount: String,
-    pub note: String,
-    pub cat: Option<i64>,
-    pub account: String,
-    pub ingreso: bool,
-    pub cat_from_guess: bool,
-    pub focus: bool,
-    pub error: String,
-}
-
 pub struct Workspace {
     pub core: Core,
     sealer: Sealer,
@@ -84,7 +71,6 @@ pub struct Workspace {
     pub privacy: bool,
     pub dark: bool,
     pub cache: Cache,
-    pub quick: Quick,
     pub modal: Modal,
     pub toasts: Vec<Toast>,
     pub now: f64,
@@ -92,6 +78,8 @@ pub struct Workspace {
     pub prices_rx: Option<Receiver<Vec<PriceResult>>>,
     pub prices_busy: bool,
     pub search_rx: Option<Receiver<Vec<SymbolHit>>>,
+    /// Activación del PIN de Windows en curso (pide el PIN en otro hilo).
+    pub hello_rx: Option<Receiver<Result<(), String>>>,
     lock_requested: bool,
     last_input: f64,
     last_pending: f64,
@@ -115,7 +103,6 @@ impl Workspace {
             privacy: false,
             dark,
             cache: Cache::default(),
-            quick: Quick { focus: true, ..Default::default() },
             modal: Modal::None,
             toasts: Vec::new(),
             now: 0.0,
@@ -123,13 +110,13 @@ impl Workspace {
             prices_rx: None,
             prices_busy: false,
             search_rx: None,
+            hello_rx: None,
             lock_requested: false,
             last_input: 0.0,
             last_pending: 0.0,
             show_help: false,
         };
         ws.dark = ws.core.setting("tema").map(|t| t != "claro").unwrap_or(dark);
-        ws.quick.account = ws.core.default_account();
         // Guardado inicial (puede haber recurrentes o intereses recién apuntados).
         ws.save_now();
         ws.refresh_prices(false);
@@ -197,6 +184,11 @@ impl Workspace {
         self.sealer = Sealer::new(new).map_err(|e| e.to_string())?;
         self.saved_version = 0;
         self.save_now();
+        // La clave cambió: el PIN guardaba la anterior y ya no sirve.
+        if crate::hello::enabled() {
+            crate::hello::disable();
+            self.toast("El desbloqueo con PIN se ha desactivado al cambiar la contraseña: vuelve a activarlo en Ajustes", false);
+        }
         if self.save_error.is_some() { Err("No se pudo guardar con la contraseña nueva".into()) } else { Ok(()) }
     }
 
@@ -259,7 +251,29 @@ impl Workspace {
         self.prices_busy = true;
     }
 
+    /// Activa el desbloqueo con el PIN de Windows (pide el PIN).
+    pub fn enable_hello(&mut self) {
+        if self.hello_rx.is_some() {
+            return;
+        }
+        let material = self.sealer.key_material();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(crate::hello::enable(material));
+        });
+        self.hello_rx = Some(rx);
+    }
+
     fn poll_background(&mut self) {
+        if let Some(rx) = &self.hello_rx {
+            if let Ok(r) = rx.try_recv() {
+                self.hello_rx = None;
+                match r {
+                    Ok(()) => self.toast("Listo: la próxima vez podrás entrar con el PIN de Windows", false),
+                    Err(e) => self.toast(e, true),
+                }
+            }
+        }
         if let Some(rx) = &self.prices_rx {
             if let Ok(res) = rx.try_recv() {
                 let errors = self.core.store_prices(&res);
@@ -272,44 +286,6 @@ impl Workspace {
         }
     }
 
-    // ---------- apunte rápido ----------
-
-    pub fn quick_submit(&mut self) {
-        let q = &mut self.quick;
-        let Some(cents) = util::eval_amount_cents(q.amount.trim_start_matches(['+', '-'])).filter(|c| *c > 0) else {
-            q.error = "Escribe un importe (p. ej. 12,50)".into();
-            q.focus = true;
-            return;
-        };
-        let ingreso = q.ingreso || q.amount.trim().starts_with('+');
-        let ty = if ingreso { "ingreso" } else { "gasto" };
-        let input = TxInput {
-            ty: ty.into(),
-            amount_cents: cents,
-            category_id: q.cat,
-            note: q.note.clone(),
-            account: q.account.clone(),
-            date: util::today_str(),
-            tags: String::new(),
-            source: "escritorio".into(),
-        };
-        let dup = self.core.is_duplicate(&input);
-        match self.core.create_tx(&input) {
-            Ok(id) => {
-                let label = if input.note.is_empty() { "Movimiento".to_string() } else { input.note.clone() };
-                let sign = if ingreso { "+" } else { "−" };
-                let mut msg = format!("Apuntado: {label} {sign}{}", util::eur(cents));
-                if dup {
-                    msg.push_str(" (ya había uno igual hoy)");
-                }
-                self.toast_undo(msg, id);
-                let acc = self.quick.account.clone();
-                self.quick = Quick { account: acc, focus: true, ..Default::default() };
-            }
-            Err(e) => self.quick.error = e,
-        }
-    }
-
     // ---------- interfaz ----------
 
     fn shortcuts(&mut self, ctx: &egui::Context) {
@@ -317,12 +293,7 @@ impl Workspace {
         let modal_open = !matches!(self.modal, Modal::None);
         let mut go: Option<View> = None;
         ctx.input_mut(|i| {
-            if i.consume_key(Modifiers::COMMAND, Key::N) {
-                self.view = View::Mes;
-                self.month = util::current_month();
-                self.quick.focus = true;
-            }
-            if i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::N) {
+            if (i.consume_key(Modifiers::COMMAND, Key::N) || i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::N)) && !modal_open {
                 self.modal = Modal::new_tx(&self.core);
             }
             if i.consume_key(Modifiers::COMMAND, Key::T) {
@@ -456,10 +427,7 @@ impl Workspace {
             .show(ctx, |ui| {
                 egui::Grid::new("atajos").num_columns(2).spacing([28.0, 8.0]).show(ui, |ui| {
                     for (k, d) in [
-                        ("Ctrl+N", "Apuntar un movimiento (línea rápida del mes)"),
-                        ("Enter", "Guardar el apunte rápido"),
-                        ("+12,50", "Un importe con + se apunta como ingreso"),
-                        ("Ctrl+Mayús+N", "Movimiento con todos los campos"),
+                        ("Ctrl+N", "Nuevo movimiento (Ctrl+Enter guarda)"),
                         ("Ctrl+T", "Transferencia entre cuentas"),
                         ("Ctrl+F", "Buscar movimientos"),
                         ("Alt+← / Alt+→", "Mes anterior / siguiente"),
@@ -489,6 +457,9 @@ impl Workspace {
             self.last_input = self.now;
         }
         self.poll_background();
+        if self.hello_rx.is_some() {
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis(200));
+        }
         self.shortcuts(&ctx);
 
         // Cambios de datos → programar guardado (pequeña espera para agrupar).

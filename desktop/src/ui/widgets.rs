@@ -420,6 +420,30 @@ pub fn segmented(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
     changed
 }
 
+/// Grupo segmentado que ocupa `width` con segmentos iguales (diálogos).
+pub fn segmented_fill(ui: &mut Ui, current: &mut usize, labels: &[&str], width: f32) -> bool {
+    let pal = p();
+    let mut changed = false;
+    let seg = (width / labels.len() as f32).floor();
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        for (i, l) in labels.iter().enumerate() {
+            let sel = *current == i;
+            let font = theme::medium(13.5);
+            let (rect, resp) = ui.allocate_exact_size(vec2(seg, 36.0), Sense::click());
+            let fill = if sel { pal.ink } else if resp.hovered() { pal.surface2 } else { Color32::TRANSPARENT };
+            ui.painter().rect(rect, CornerRadius::ZERO, fill, Stroke::new(1.0, if sel { pal.ink } else { pal.line_strong }), StrokeKind::Inside);
+            ui.painter().text(rect.center(), Align2::CENTER_CENTER, *l, font, if sel { pal.bg } else { pal.ink2 });
+            if resp.clicked() && !sel {
+                *current = i;
+                changed = true;
+            }
+            resp.on_hover_cursor(egui::CursorIcon::PointingHand);
+        }
+    });
+    changed
+}
+
 /// Aviso efímero en la esquina inferior.
 #[derive(Clone)]
 pub struct Toast {

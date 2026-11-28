@@ -17,7 +17,8 @@ type Opened = Result<(Core, Sealer, bool), String>;
 
 enum Phase {
     Setup { pass: String, pass2: String, import: bool, import_path: Option<PathBuf>, error: String },
-    Locked { pass: String, error: String, attempts: u32 },
+    /// `hello_tried`: ya se pidió el PIN de Windows en esta pantalla (no repetir solo).
+    Locked { pass: String, error: String, attempts: u32, hello_tried: bool },
     Busy { rx: Receiver<Opened>, label: String },
     Open(Box<Workspace>),
 }
@@ -36,7 +37,7 @@ impl App {
         cc.egui_ctx.set_fonts(theme::fonts());
         let dark = cc.storage.and_then(|s| s.get_string("tema")).map(|t| t != "claro").unwrap_or(true);
         let phase = if store::data_file().exists() {
-            Phase::Locked { pass: String::new(), error: String::new(), attempts: 0 }
+            Phase::Locked { pass: String::new(), error: String::new(), attempts: 0, hello_tried: false }
         } else {
             let found = db::guess_web_db();
             Phase::Setup { pass: String::new(), pass2: String::new(), import: found.is_some(), import_path: found, error: String::new() }
@@ -55,6 +56,13 @@ impl App {
 fn open_existing(password: String) -> Opened {
     let bytes = std::fs::read(store::data_file()).map_err(|e| format!("No se pudo leer el archivo de datos: {e}"))?;
     let (sealer, plain) = Sealer::open(&bytes, &password).map_err(|e| e.to_string())?;
+    let conn = db::from_bytes(&plain).map_err(|e| format!("El archivo se descifró pero la base está dañada: {e}"))?;
+    Ok((Core::new(conn), sealer, false))
+}
+
+fn open_with_hello() -> Opened {
+    let bytes = std::fs::read(store::data_file()).map_err(|e| format!("No se pudo leer el archivo de datos: {e}"))?;
+    let (sealer, plain) = crate::hello::unlock(&bytes)?;
     let conn = db::from_bytes(&plain).map_err(|e| format!("El archivo se descifró pero la base está dañada: {e}"))?;
     Ok((Core::new(conn), sealer, false))
 }
@@ -149,7 +157,7 @@ impl eframe::App for App {
                     sh.setup(Some(ws));
                     sh.inject(&ctx, ws);
                     sh.dialogs(ws);
-                    sh.click(ws);
+                    sh.click(ws, &ctx);
                     self.dark = ws.dark;
                     if sh.tick(&ctx) {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -213,14 +221,14 @@ impl eframe::App for App {
                     ui.add_space(12.0);
                     match import_path {
                         Some(path) => {
-                            ui.checkbox(import, RichText::new("Importar mis datos de la app web").color(pal.ink));
+                            ui.checkbox(import, RichText::new("Importar esta base de datos de FinanZillo").color(pal.ink));
                             ui.label(RichText::new(path.display().to_string()).font(theme::mono(11.0)).color(pal.muted));
                         }
                         None => {
-                            ui.label(RichText::new("No he encontrado la base de la app web; puedes elegirla o empezar de cero.").color(pal.muted));
+                            ui.label(RichText::new("Empezarás con una base vacía. Si ya usabas FinanZillo, puedes importar tu base de datos (.db).").color(pal.muted));
                         }
                     }
-                    if w::button(ui, Some(egui_phosphor::light::FOLDER_OPEN), "Elegir otra base de datos…", Kind::Ghost).clicked() {
+                    if w::button(ui, Some(egui_phosphor::light::FOLDER_OPEN), "Importar una base de datos…", Kind::Ghost).clicked() {
                         if let Some(f) = rfd::FileDialog::new().add_filter("Base de datos SQLite", &["db", "sqlite"]).pick_file() {
                             *import_path = Some(f);
                             *import = true;
@@ -253,17 +261,30 @@ impl eframe::App for App {
                     }
                 });
             }
-            Phase::Locked { pass, error, attempts } => {
+            Phase::Locked { pass, error, attempts, hello_tried } => {
+                let hello_on = crate::hello::enabled();
+                // Con el PIN activado se pide nada más bloquear o abrir (una vez).
+                let test_mode = std::env::var("FZ_TEST_PASSWORD").is_ok();
+                let mut use_hello = hello_on && !*hello_tried && !test_mode;
                 shell(ui, |ui| {
-                    ui.label(RichText::new("Introduce tu contraseña").font(theme::wide(18.0)));
+                    ui.label(RichText::new(if hello_on { "Desbloquea FinanZillo" } else { "Introduce tu contraseña" }).font(theme::wide(18.0)));
                     ui.add_space(14.0);
+                    if hello_on {
+                        if w::button_ex(ui, Some(egui_phosphor::light::FINGERPRINT), "Usar el PIN de Windows", Kind::Primary, true, true).clicked() {
+                            use_hello = true;
+                        }
+                        ui.add_space(10.0);
+                        ui.label(RichText::new("o escribe la contraseña").color(pal.muted));
+                        ui.add_space(4.0);
+                    }
                     let r = pass_field(ui, pass, "Contraseña", true);
                     ui.add_space(10.0);
                     if !error.is_empty() {
                         ui.label(RichText::new(error.as_str()).color(pal.critical));
                         ui.add_space(6.0);
                     }
-                    let go = w::button_ex(ui, Some(egui_phosphor::light::LOCK_KEY_OPEN), "Abrir", Kind::Primary, true, !pass.is_empty()).clicked()
+                    let kind = if hello_on { Kind::Secondary } else { Kind::Primary };
+                    let go = w::button_ex(ui, Some(egui_phosphor::light::LOCK_KEY_OPEN), "Abrir", kind, true, !pass.is_empty()).clicked()
                         || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) && !pass.is_empty());
                     if go {
                         let (tx, rx) = channel();
@@ -280,6 +301,16 @@ impl eframe::App for App {
                         next = Some(Phase::Busy { rx, label: "Descifrando…".into() });
                     }
                 });
+                if use_hello && next.is_none() {
+                    *hello_tried = true;
+                    let (tx, rx) = channel();
+                    let ctx2 = ctx.clone();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(open_with_hello());
+                        ctx2.request_repaint();
+                    });
+                    next = Some(Phase::Busy { rx, label: "Confirma con tu PIN de Windows…".into() });
+                }
             }
             Phase::Busy { rx, label } => {
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("fz_focus_frames"), 0u32));
@@ -303,7 +334,7 @@ impl eframe::App for App {
                         eprintln!("apertura fallida: {e}");
                         let attempts = 1;
                         next = Some(if store::data_file().exists() {
-                            Phase::Locked { pass: String::new(), error: e, attempts }
+                            Phase::Locked { pass: String::new(), error: e, attempts, hello_tried: true }
                         } else {
                             let found = db::guess_web_db();
                             Phase::Setup { pass: String::new(), pass2: String::new(), import: found.is_some(), import_path: found, error: e }
@@ -316,7 +347,8 @@ impl eframe::App for App {
                 if ws.ui(ui) {
                     // Bloquear: guardar y volver a pedir la contraseña.
                     ws.save_now();
-                    next = Some(Phase::Locked { pass: String::new(), error: String::new(), attempts: 0 });
+                    // Al bloquear no salta el PIN solo (podrías no estar delante): botón.
+                    next = Some(Phase::Locked { pass: String::new(), error: String::new(), attempts: 0, hello_tried: true });
                 }
             }
         }

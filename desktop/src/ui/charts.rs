@@ -457,20 +457,142 @@ pub fn spark(ui: &mut Ui, values: &[f64], w: f32, h: f32) {
     ui.painter().add(Shape::line(pts, Stroke::new(1.3, col)));
 }
 
-/// Barra horizontal apilada de categorías (la «tira de códigos» del mes).
-pub fn category_strip(ui: &mut Ui, parts: &[(Color32, i64)], height: f32) {
-    let w = ui.available_width();
-    let (rect, _) = ui.allocate_exact_size(vec2(w, height), Sense::hover());
-    let total: i64 = parts.iter().map(|x| x.1).sum();
+/// Anillo de reparto (gasto o ingreso por categoría). `focus` resalta una
+/// porción desde fuera (la leyenda). Devuelve la porción bajo el ratón y la
+/// pulsada. En el hueco: la porción resaltada o, si no hay, el total.
+pub struct Slice {
+    pub color: Color32,
+    pub value: i64,
+    /// Texto del hueco cuando la porción está resaltada (importe y nombre).
+    pub big: String,
+    pub small: String,
+}
+
+/// Sector de corona como malla: bordes interior y exterior suavizados con una
+/// franja de `f` px que se desvanece. Los cortes radiales son exactos (ángulos
+/// compartidos con la porción vecina), así que las porciones encajan sin hueco.
+fn ring_sector(mesh: &mut egui::Mesh, c: Pos2, r0: f32, r1: f32, a0: f32, a1: f32, col: Color32, f: f32) {
+    let radii = [r0 - f / 2.0, r0 + f / 2.0, r1 - f / 2.0, r1 + f / 2.0];
+    let alpha = [0.0, 1.0, 1.0, 0.0];
+    // Segmentos de ~2 px en el borde exterior: curva lisa a cualquier tamaño.
+    let steps = (((a1 - a0) * r1) / 2.0).ceil().max(2.0) as u32;
+    let base = mesh.vertices.len() as u32;
+    for k in 0..=steps {
+        let a = a0 + (a1 - a0) * k as f32 / steps as f32;
+        let dir = vec2(a.cos(), a.sin());
+        for j in 0..4 {
+            mesh.colored_vertex(c + dir * radii[j], col.gamma_multiply(alpha[j]));
+        }
+    }
+    for k in 0..steps {
+        for j in 0..3u32 {
+            let i0 = base + k * 4 + j;
+            let i1 = i0 + 4;
+            mesh.add_triangle(i0, i0 + 1, i1);
+            mesh.add_triangle(i0 + 1, i1 + 1, i1);
+        }
+    }
+}
+
+fn mix(a: Color32, b: Color32, t: f32) -> Color32 {
+    let l = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;
+    Color32::from_rgb(l(a.r(), b.r()), l(a.g(), b.g()), l(a.b(), b.b()))
+}
+
+pub fn donut(ui: &mut Ui, slices: &[Slice], size: f32, center: (&str, &str), focus: Option<usize>) -> (Option<usize>, Option<usize>) {
+    use egui::emath::easing;
+    let pal = p();
+    let (rect, resp) = ui.allocate_exact_size(vec2(size, size), Sense::click());
+    let ctx = ui.ctx().clone();
+    let id = resp.id;
+    let c = rect.center();
+    const GROW: f32 = 6.0;
+    let r_out = size / 2.0 - GROW - 1.0;
+    let r_in = r_out * 0.66;
+    let total: i64 = slices.iter().map(|s| s.value.max(0)).sum();
+    let tau = std::f32::consts::TAU;
+    let start = -tau / 4.0;
+
+    // Entrada: al cambiar los datos (otro mes) el anillo se dibuja en barrido.
+    let key = slices.iter().fold(total as u64, |h, s| h.wrapping_mul(31).wrapping_add(s.value as u64));
+    let now = ctx.input(|i| i.time);
+    let (last_key, t0) = ctx.data(|d| d.get_temp::<(u64, f64)>(id.with("sweep"))).unwrap_or((0, now));
+    let t0 = if last_key != key { now } else { t0 };
+    ctx.data_mut(|d| d.insert_temp(id.with("sweep"), (key, t0)));
+    let sweep_t = (((now - t0) / 0.55) as f32).clamp(0.0, 1.0);
+    if sweep_t < 1.0 {
+        ctx.request_repaint();
+    }
+    let sweep = easing::cubic_out(sweep_t);
+
+    // Porción bajo el ratón: por ángulo y radio.
+    let mut hovered = None;
+    if let Some(pos) = resp.hover_pos() {
+        let d = pos - c;
+        let dist = d.length();
+        if total > 0 && dist >= r_in - 2.0 && dist <= r_out + GROW + 2.0 {
+            let ang = (d.y.atan2(d.x) - start).rem_euclid(tau);
+            let mut acc = 0.0;
+            for (i, s) in slices.iter().enumerate() {
+                let frac = s.value.max(0) as f32 / total as f32;
+                if ang >= acc * tau && ang < (acc + frac) * tau {
+                    hovered = Some(i);
+                    break;
+                }
+                acc += frac;
+            }
+        }
+    }
+    let lit = hovered.or(focus);
+    let painter = ui.painter_at(rect.expand(2.0));
+    let f = 1.0 / ctx.pixels_per_point();
     if total <= 0 {
-        ui.painter().rect_filled(rect, CornerRadius::ZERO, p().line);
-        return;
+        let mut mesh = egui::Mesh::default();
+        ring_sector(&mut mesh, c, r_in, r_out, 0.0, tau, pal.line, f);
+        painter.add(Shape::mesh(mesh));
+    } else {
+        let mut mesh = egui::Mesh::default();
+        let mut cuts = Vec::new();
+        let mut a0 = start;
+        let mut grows = Vec::new();
+        for (i, sl) in slices.iter().enumerate() {
+            let a1 = a0 + sl.value.max(0) as f32 / total as f32 * tau * sweep;
+            // Resaltado animado: la porción crece y las demás se apagan.
+            let on = ctx.animate_bool_with_time_and_easing(id.with(("on", i)), lit == Some(i), 0.18, easing::cubic_out);
+            let off = ctx.animate_bool_with_time_and_easing(id.with(("off", i)), lit.is_some() && lit != Some(i), 0.18, easing::cubic_out);
+            let col = mix(sl.color, pal.bg, 0.62 * off);
+            if a1 > a0 {
+                ring_sector(&mut mesh, c, r_in - 2.0 * on, r_out + GROW * on, a0, a1, col, f);
+            }
+            grows.push(on);
+            cuts.push(a0);
+            a0 = a1;
+        }
+        painter.add(Shape::mesh(mesh));
+        // Separadores de grosor constante (lados paralelos), del color del
+        // fondo, por encima de los cortes: todas las juntas iguales.
+        if slices.iter().filter(|s| s.value > 0).count() > 1 {
+            if sweep >= 1.0 {
+                cuts.push(start + tau);
+            }
+            for a in cuts.iter().skip(if sweep >= 1.0 { 1 } else { 0 }) {
+                let dir = vec2(a.cos(), a.sin());
+                painter.line_segment([c + dir * (r_in - 3.0), c + dir * (r_out + GROW + 1.5)], Stroke::new(2.0, pal.bg));
+            }
+        }
+        if grows.iter().any(|g| *g > 0.0 && *g < 1.0) {
+            ctx.request_repaint();
+        }
     }
-    let mut x = rect.left();
-    for (c, v) in parts {
-        let ww = rect.width() * (*v as f32 / total as f32);
-        let r = Rect::from_min_size(pos2(x, rect.top()), vec2((ww - 2.0).max(1.0), rect.height()));
-        ui.painter().rect_filled(r, CornerRadius::ZERO, *c);
-        x += ww;
+    let (big, small) = match lit.and_then(|i| slices.get(i)) {
+        Some(sl) => (sl.big.clone(), sl.small.clone()),
+        None => (center.0.to_string(), center.1.to_string()),
+    };
+    painter.text(c - vec2(0.0, 7.0), Align2::CENTER_CENTER, big, theme::mono_bold((size / 11.0).clamp(13.0, 19.0)), pal.ink);
+    painter.text(c + vec2(0.0, 13.0), Align2::CENTER_CENTER, small, theme::ui_font(11.5), pal.muted);
+    if hovered.is_some() {
+        ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
     }
+    let clicked = if resp.clicked() { hovered } else { None };
+    (hovered, clicked)
 }

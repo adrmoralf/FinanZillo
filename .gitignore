@@ -12,3 +12,15 @@ desktop/target/
 data/
 .env
 certs/
+*.fzk
+copias/
+*.pem
+*.key
+*.pfx
+*.p12
+.env.*
+
+# Configuración local de herramientas
+.claude/settings.local.json
+.vscode/
+.idea/

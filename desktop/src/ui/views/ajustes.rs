@@ -14,6 +14,8 @@ use crate::ui::workspace::Workspace;
 pub struct AjustesState {
     pub global_budget: Option<String>,
     pub autolock: Option<String>,
+    /// ¿Hay Windows Hello en este equipo? (se consulta una vez).
+    pub hello_supported: Option<bool>,
 }
 
 fn section(ui: &mut Ui, title: &str, hint: &str) {
@@ -39,6 +41,29 @@ pub fn show(ws: &mut Workspace, ui: &mut Ui) {
             }
             if w::button(ui, Some(ic::FOLDER_OPEN), "Abrir carpeta de datos", Kind::Secondary).clicked() {
                 let _ = std::process::Command::new("explorer").arg(store::data_dir()).spawn();
+            }
+        });
+        // Desbloqueo con el PIN de Windows (Windows Hello).
+        ui.add_space(8.0);
+        let supported = *ws.views.ajustes.hello_supported.get_or_insert_with(crate::hello::supported);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(egui_phosphor::light::FINGERPRINT).font(theme::icon(16.0)).color(pal.ink2));
+            if !supported {
+                ui.label(RichText::new("Para entrar con el PIN del ordenador, configura antes un PIN en Windows (Configuración › Cuentas › Opciones de inicio de sesión).").color(pal.muted));
+            } else if crate::hello::enabled() {
+                ui.label(RichText::new("Entras con el PIN de Windows").color(pal.positive));
+                if w::button(ui, None, "Desactivar", Kind::Ghost).clicked() {
+                    crate::hello::disable();
+                    ws.toast("Desbloqueo con PIN desactivado: se pedirá la contraseña", false);
+                }
+            } else if ws.hello_rx.is_some() {
+                ui.spinner();
+                ui.label(RichText::new("Confirma con tu PIN en la ventana de Windows…").color(pal.ink2));
+            } else {
+                if w::button(ui, None, "Entrar con el PIN de Windows", Kind::Secondary).clicked() {
+                    ws.enable_hello();
+                }
+                ui.label(RichText::new("La contraseña seguirá sirviendo siempre.").color(pal.muted));
             }
         });
         ui.horizontal(|ui| {
@@ -134,7 +159,7 @@ pub fn show(ws: &mut Workspace, ui: &mut Ui) {
         });
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if w::button(ui, Some(ic::DATABASE), "Volver a importar la base de la app web…", Kind::Secondary).clicked() {
+            if w::button(ui, Some(ic::DATABASE), "Importar una base de datos de FinanZillo…", Kind::Secondary).clicked() {
                 let start = crate::db::guess_web_db();
                 let mut dlg = rfd::FileDialog::new().add_filter("Base de datos SQLite", &["db", "sqlite"]);
                 if let Some(dir) = start.as_ref().and_then(|p| p.parent()) {
@@ -153,8 +178,7 @@ pub fn show(ws: &mut Workspace, ui: &mut Ui) {
 
         section(ui, "Atajos de teclado", "Pulsa F1 en cualquier momento para verlos.");
         for (k, d) in [
-            ("Ctrl+N", "Apuntar (línea rápida)"),
-            ("Ctrl+Mayús+N", "Movimiento con todos los campos"),
+            ("Ctrl+N", "Nuevo movimiento"),
             ("Ctrl+T", "Transferencia"),
             ("Ctrl+F", "Buscar movimientos"),
             ("Alt+← / Alt+→", "Cambiar de mes"),

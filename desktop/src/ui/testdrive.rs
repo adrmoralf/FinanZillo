@@ -64,17 +64,21 @@ impl Shots {
             }
             ws.dark = opt != "claro";
             ws.modal = match opt {
-                "nuevo" => Modal::new_tx(&ws.core),
+                "nuevo" | "apunte" => Modal::new_tx(&ws.core),
+                "transferencia" => Modal::new_transfer(),
+                "editar" => ws.core.recent(1).first().map(Modal::edit_tx).unwrap_or(Modal::None),
                 "ficha" => ws.core.resolve_category("Ocio", "gasto").map(|id| Modal::CategoryDetail { id, month: ws.month.clone() }).unwrap_or(Modal::None),
                 "cuenta" => ws.cache.accounts.iter().find(|a| a.apy > 0.0).or(ws.cache.accounts.first()).map(Modal::edit_account).unwrap_or(Modal::None),
                 _ => Modal::None,
             };
             ws.toasts.clear();
             if opt == "apunte" {
-                // Simula: Ctrl+N, «2,50», «Café de prueba», Enter.
-                ws.quick.amount = "2,50".into();
-                ws.quick.note = "Café de prueba".into();
-                ws.quick_submit();
+                // Diálogo nuevo con datos: importe con cuenta y concepto conocido.
+                if let Modal::Tx(f) = &mut ws.modal {
+                    f.amount = "2,50+1".into();
+                    f.note = "Café".into();
+                    f.focus = false;
+                }
             }
             if opt == "pdf" {
                 let out = self.dir.join("informe.pdf");
@@ -89,7 +93,7 @@ impl Shots {
     }
 
     /// Guion de teclado («mes:teclado»): Ctrl+N, «3,20», Tab, concepto, Tab,
-    /// «oci», Enter. Se inyecta al principio del frame, antes que los widgets.
+    /// «oci», Enter, Ctrl+Enter. Se inyecta al principio del frame, antes que los widgets.
     pub fn inject(&mut self, ctx: &egui::Context, ws: &mut Workspace) {
         if self.current() != Some("mes:teclado") {
             return;
@@ -99,8 +103,8 @@ impl Shots {
         self.script_frame += 1;
         let ev: Option<egui::Event> = match f {
             2 => {
-                ws.quick.focus = true; // equivale a Ctrl+N
-                None
+                self.pending_mods = egui::Modifiers::COMMAND;
+                Some(egui::Event::Key { key: egui::Key::N, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND })
             }
             5 => Some(egui::Event::Text("3,20".into())),
             7 => Some(key(egui::Key::Tab)),
@@ -108,7 +112,11 @@ impl Shots {
             11 => Some(key(egui::Key::Tab)),
             13 => Some(egui::Event::Text("oci".into())),
             15 => Some(key(egui::Key::Enter)),
-            18 => {
+            17 => {
+                self.pending_mods = egui::Modifiers::COMMAND;
+                Some(egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND })
+            }
+            20 => {
                 let t = ws.core.recent(1);
                 match t.first() {
                     Some(t) if t.note == "Prueba teclado" => eprintln!(
@@ -128,7 +136,7 @@ impl Shots {
             self.pending.push(e);
             ctx.request_repaint();
         }
-        if f < 22 {
+        if f < 24 {
             self.wait = 1; // no capturar hasta terminar el guion
         }
     }
@@ -162,7 +170,7 @@ impl Shots {
         let core = &ws.core;
         let ctrl_enter = egui::Event::Key { key: egui::Key::Enter, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::COMMAND };
         let esc = egui::Event::Key { key: egui::Key::Escape, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::NONE };
-        let caixa = core.default_account();
+        let cuenta = core.default_account();
         let ocio = core.resolve_category("Ocio", "gasto");
         if phase == 0 {
             ws.modal = match n {
@@ -180,7 +188,7 @@ impl Shots {
                     let mut m = Modal::new_transfer();
                     if let Modal::Tx(f) = &mut m {
                         f.amount = "5".into();
-                        f.from = caixa.clone();
+                        f.from = cuenta.clone();
                         f.to = "Efectivo".into();
                         f.note = "Transferencia de prueba".into();
                         f.focus = false;
@@ -216,7 +224,7 @@ impl Shots {
                     amount: "9,99".into(),
                     note: "Recurrente de prueba".into(),
                     cat: ocio,
-                    account: caixa.clone(),
+                    account: cuenta.clone(),
                     from: String::new(),
                     to: String::new(),
                     inv: None,
@@ -232,7 +240,7 @@ impl Shots {
                     let g = core.goals().into_iter().find(|g| g.name == "Objetivo de prueba").expect("objetivo creado");
                     Modal::GoalAdd(GoalAddForm { id: g.id, name: g.name, amount: "120".into(), withdraw: false, error: String::new() })
                 }
-                9 => Modal::Template(TemplateForm { name: "Metro".into(), amount: "1,50".into(), cat: None, account: caixa.clone(), error: String::new() }),
+                9 => Modal::Template(TemplateForm { name: "Metro".into(), amount: "1,50".into(), cat: None, account: cuenta.clone(), error: String::new() }),
                 10 => {
                     // Esc cierra sin guardar.
                     let mut m = Modal::new_tx(core);
@@ -323,36 +331,52 @@ impl Shots {
 
     /// Clic de ratón real en FZ_CLICK=x,y («mes:clic»): mueve, pulsa, suelta y
     /// dice qué diálogo se abrió.
-    pub fn click(&mut self, ws: &Workspace) {
+    pub fn click(&mut self, ws: &Workspace, ctx: &egui::Context) {
         if self.current() != Some("mes:clic") {
             return;
         }
-        let Some((x, y)) = std::env::var("FZ_CLICK").ok().and_then(|v| {
-            let (a, b) = v.split_once(',')?;
-            Some((a.trim().parse::<f32>().ok()?, b.trim().parse::<f32>().ok()?))
-        }) else {
+        // FZ_CLICK=x,y[;x,y…]: varios clics seguidos (p. ej. borrar y confirmar).
+        let pts: Vec<egui::Pos2> = std::env::var("FZ_CLICK")
+            .unwrap_or_default()
+            .split(';')
+            .filter_map(|v| {
+                let (a, b) = v.split_once(',')?;
+                Some(egui::pos2(a.trim().parse().ok()?, b.trim().parse().ok()?))
+            })
+            .collect();
+        if pts.is_empty() {
             return;
-        };
-        let pos = egui::pos2(x, y);
+        }
         let f = self.script_frame;
         self.script_frame += 1;
-        let btn = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
-        match f {
-            20 => self.pending.push(egui::Event::PointerMoved(pos)),
-            23 => self.pending.push(btn(true)),
-            25 => self.pending.push(btn(false)),
-            30 => {
-                let what = match &ws.modal {
-                    super::forms::Modal::None => "ningún diálogo".to_string(),
-                    super::forms::Modal::Tx(_) => "diálogo de EDITAR movimiento".to_string(),
-                    super::forms::Modal::Confirm { title, .. } => format!("confirmación: «{title}»"),
-                    _ => "otro diálogo".to_string(),
-                };
-                eprintln!("clic en ({x},{y}) → {what}");
-            }
-            _ => {}
+        let total = || ws.core.recent(100_000).len();
+        if f == 19 {
+            eprintln!("clic: {} puntos por píxel · movimientos: {}", ctx.pixels_per_point(), total());
         }
-        if f < 34 {
+        // Cada clic ocupa 14 frames a partir del 20.
+        let (i, k) = (f.saturating_sub(20) / 14, f.saturating_sub(20) % 14);
+        if f >= 20 {
+            if let Some(&pos) = pts.get(i as usize) {
+                let btn = |pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Primary, pressed, modifiers: egui::Modifiers::NONE };
+                match k {
+                    0 => self.pending.push(egui::Event::PointerMoved(pos)),
+                    // FZ_HOVER=1: solo pasar el ratón (capturar resaltados).
+                    3 if std::env::var("FZ_HOVER").is_err() => self.pending.push(btn(true)),
+                    5 if std::env::var("FZ_HOVER").is_err() => self.pending.push(btn(false)),
+                    10 => {
+                        let what = match &ws.modal {
+                            super::forms::Modal::None => "ningún diálogo".to_string(),
+                            super::forms::Modal::Tx(f) => format!("diálogo de movimiento (importe «{}», concepto «{}», fecha {})", f.amount, f.note, f.date),
+                            super::forms::Modal::Confirm { title, .. } => format!("confirmación: «{title}»"),
+                            _ => "otro diálogo".to_string(),
+                        };
+                        eprintln!("clic {} en ({},{}) → {what} · movimientos: {}", i + 1, pos.x, pos.y, total());
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if f < 20 + 14 * pts.len() as u32 + 4 {
             self.wait = 1;
         }
     }

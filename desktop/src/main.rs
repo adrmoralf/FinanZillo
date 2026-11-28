@@ -3,13 +3,14 @@
 mod app;
 mod db;
 mod demo;
+mod hello;
 mod ledger;
 mod store;
 mod ui;
 mod util;
 
 /// `finanzillo --dump <base.db> <mes>…`: vuelca cálculos en JSON para
-/// compararlos con la app web (verificación de paridad; no abre ventana).
+/// compararlos con otra implementación (verificación de paridad; no abre ventana).
 fn dump(args: &[String]) -> Result<(), String> {
     let path = std::path::Path::new(args.first().ok_or("falta la ruta de la base")?);
     let conn = db::import_sqlite_file(path)?;
@@ -89,6 +90,11 @@ fn main() {
     }
     #[allow(unused_mut)]
     let mut options = eframe::NativeOptions { viewport, persist_window: true, ..Default::default() };
+    // Con una carpeta de datos alternativa (pruebas) tampoco se toca el estado
+    // de ventana y tema del usuario: va dentro de esa carpeta.
+    if std::env::var("FINANZILLO_DATA_DIR").is_ok_and(|d| !d.trim().is_empty()) {
+        options.persistence_path = Some(store::data_dir().join("app.ron"));
+    }
     // En las capturas con tamaño fijo no se restaura la ventana guardada.
     #[cfg(debug_assertions)]
     if std::env::var("FZ_SIZE").is_ok() {

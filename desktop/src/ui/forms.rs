@@ -28,6 +28,8 @@ pub struct TxForm {
     pub as_template: bool,
     pub error: String,
     pub focus: bool,
+    /// La categoría la propuso el concepto (se puede seguir cambiando sola).
+    pub cat_guessed: bool,
 }
 
 pub struct AccountForm {
@@ -183,6 +185,7 @@ impl Modal {
             as_template: false,
             error: String::new(),
             focus: true,
+            cat_guessed: false,
         })
     }
     pub fn new_transfer() -> Modal {
@@ -202,6 +205,7 @@ impl Modal {
             as_template: false,
             error: String::new(),
             focus: true,
+            cat_guessed: false,
         })
     }
     pub fn edit_tx(t: &Tx) -> Modal {
@@ -221,6 +225,7 @@ impl Modal {
             as_template: false,
             error: String::new(),
             focus: true,
+            cat_guessed: false,
         })
     }
     pub fn edit_transfer(t: &Transfer) -> Modal {
@@ -240,6 +245,7 @@ impl Modal {
             as_template: false,
             error: String::new(),
             focus: true,
+            cat_guessed: false,
         })
     }
     pub fn confirm_delete_tx(t: &Tx) -> Modal {
@@ -333,6 +339,54 @@ fn account_picker(ui: &mut Ui, id: &str, current: &mut String, accounts: &[Strin
     });
 }
 
+/// Rótulo de campo con icono: dice de un vistazo qué va en cada sitio.
+fn form_label(ui: &mut Ui, icon: &str, label: &str) {
+    ui.add_space(10.0);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        ui.spacing_mut().interact_size.y = 14.0;
+        ui.label(RichText::new(icon).font(theme::icon(14.0)).color(p().ink2));
+        w::label_caps(ui, label);
+    });
+    ui.add_space(2.0);
+}
+
+fn account_picker_w(ui: &mut Ui, id: &str, current: &mut String, accounts: &[String], allow_new: bool, new_name: &mut String, width: f32) {
+    let mut opts: Vec<(String, String)> = accounts.iter().map(|a| (a.clone(), a.clone())).collect();
+    if !current.is_empty() && !accounts.contains(current) {
+        opts.push((current.clone(), current.clone()));
+    }
+    opts.insert(0, (String::new(), "(sin cuenta)".into()));
+    if allow_new {
+        opts.push(("\u{1}nueva".into(), "Otra cuenta…".into()));
+    }
+    w::select(ui, id, current, &opts, width - 8.0);
+    if current == "\u{1}nueva" {
+        ui.add_space(4.0);
+        w::text_field(ui, new_name, "Nombre de la cuenta nueva", width);
+    }
+}
+
+/// Pastilla de categoría con su color; la elegida va en tinta.
+fn cat_chip(ui: &mut Ui, name: &str, color: egui::Color32, selected: bool) -> egui::Response {
+    let pal = p();
+    let font = theme::ui_font(13.0);
+    let g = ui.painter().layout_no_wrap(name.to_string(), font.clone(), pal.ink);
+    let (rect, resp) = ui.allocate_exact_size(vec2(g.size().x + 30.0, 28.0), egui::Sense::click());
+    let (fill, stroke, text) = if selected {
+        (pal.ink, pal.ink, pal.bg)
+    } else if resp.hovered() {
+        (pal.surface2, pal.line_strong, pal.ink)
+    } else {
+        (egui::Color32::TRANSPARENT, pal.line_strong, pal.ink2)
+    };
+    ui.painter().rect(rect, w::R2, fill, egui::Stroke::new(1.0, stroke), egui::StrokeKind::Inside);
+    let sw = egui::Rect::from_center_size(egui::pos2(rect.left() + 11.0, rect.center().y), vec2(8.0, 8.0));
+    ui.painter().rect_filled(sw, egui::CornerRadius::ZERO, color);
+    ui.painter().text(egui::pos2(rect.left() + 21.0, rect.center().y), egui::Align2::LEFT_CENTER, name, font, text);
+    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+}
+
 fn resolve_account(sel: &str, new_name: &str) -> String {
     if sel == "\u{1}nueva" { new_name.trim().to_string() } else { sel.to_string() }
 }
@@ -415,62 +469,184 @@ fn body(ws: &mut Workspace, ui: &mut Ui, modal: &mut Modal) -> bool {
         Modal::None => false,
         Modal::Tx(f) => {
             let editing_transfer = f.transfer_id.is_some();
-            title(
-                ui,
-                match (f.id.is_some() || editing_transfer, f.kind) {
+            let full = ui.available_width();
+            ui.vertical_centered(|ui| {
+                let t = match (f.id.is_some() || editing_transfer, f.kind) {
                     (true, 2) => "Editar transferencia",
                     (true, _) => "Editar movimiento",
                     (false, 2) => "Nueva transferencia",
                     _ => "Nuevo movimiento",
-                },
-            );
+                };
+                ui.label(RichText::new(t).font(theme::wide(18.0)).color(pal.ink));
+            });
+            ui.add_space(12.0);
             if f.id.is_none() && !editing_transfer {
-                w::segmented(ui, &mut f.kind, &["Gasto", "Ingreso", "Transferencia"]);
+                w::segmented_fill(ui, &mut f.kind, &["Gasto", "Ingreso", "Transferencia"], full);
             } else if f.id.is_some() {
                 let mut k = f.kind.min(1);
-                if w::segmented(ui, &mut k, &["Gasto", "Ingreso"]) {
+                if w::segmented_fill(ui, &mut k, &["Gasto", "Ingreso"], full) {
                     f.kind = k;
                     f.cat = None;
                 }
             }
-            field(ui, "Importe (admite cuentas: 12,50+3*2)");
-            ui.horizontal(|ui| {
-                let r = w::mono_field(ui, &mut f.amount, "0,00", 160.0);
+            // Importe grande y centrado, del color del tipo.
+            let tone = match f.kind {
+                0 => pal.gasto,
+                1 => pal.ingreso,
+                _ => pal.ink,
+            };
+            ui.add_space(16.0);
+            // Ancho fijo de la caja del importe para poder centrarla.
+            const BOX: f32 = 24.0 + 220.0 + 24.0 + 12.0 + 28.0 + 2.0;
+            let r = ui
+                .horizontal(|ui| {
+                    ui.add_space(((full - BOX) / 2.0).max(0.0));
+                    egui::Frame::new()
+                        .stroke(egui::Stroke::new(1.0, pal.line_strong))
+                        .fill(pal.bg)
+                        .corner_radius(w::R2)
+                        .inner_margin(egui::Margin::symmetric(14, 6))
+                        .show(ui, |ui| {
+                            ui.spacing_mut().item_spacing.x = 6.0;
+                            let sign = match f.kind {
+                                0 => "−",
+                                1 => "+",
+                                _ => "",
+                            };
+                            ui.add_sized(vec2(24.0, 44.0), egui::Label::new(RichText::new(sign).font(theme::display(30.0)).color(tone)));
+                            let r = ui.add(
+                                egui::TextEdit::singleline(&mut f.amount)
+                                    .id(egui::Id::new("tx_amount"))
+                                    .font(theme::display(30.0))
+                                    .text_color(tone)
+                                    .hint_text(RichText::new("0,00").font(theme::display(30.0)).color(pal.line_strong))
+                                    .horizontal_align(Align::Center)
+                                    .desired_width(220.0)
+                                    .frame(egui::Frame::NONE),
+                            );
+                            ui.add_sized(vec2(24.0, 44.0), egui::Label::new(RichText::new("€").font(theme::display(22.0)).color(pal.muted)));
+                            r
+                        })
+                        .inner
+                })
+                .inner;
+            ui.vertical_centered(|ui| {
                 if f.focus {
                     r.request_focus();
                     f.focus = false;
                 }
-                if let Some(v) = util::eval_amount_cents(&f.amount) {
-                    if f.amount.trim_start_matches(['+', '-']).contains(['+', '-', '*', '/', 'x']) {
-                        ui.label(RichText::new(format!("= {}", util::eur(v))).font(theme::mono(13.0)).color(pal.ink2));
+                let calc = util::eval_amount_cents(&f.amount).filter(|_| f.amount.trim_start_matches(['+', '-']).contains(['+', '-', '*', '/', 'x']));
+                let hint = match calc {
+                    Some(v) => format!("= {}", util::eur(v)),
+                    None => "IMPORTE · ADMITE CUENTAS: 12,50+3*2".to_string(),
+                };
+                ui.add_space(4.0);
+                ui.label(RichText::new(hint).font(theme::mono(11.0)).color(if calc.is_some() { pal.ink2 } else { pal.muted }));
+            });
+            ui.add_space(8.0);
+            let ty = if f.kind == 1 { "ingreso" } else { "gasto" };
+            form_label(ui, ic::TEXT_ALIGN_LEFT, if f.kind == 2 { "Nota (opcional)" } else { "Concepto" });
+            let note = w::text_field(ui, &mut f.note, if f.kind == 2 { "Ahorro mensual…" } else { "Supermercado, nómina…" }, full);
+            if f.kind != 2 {
+                if note.changed() && f.id.is_none() {
+                    // Un concepto ya usado propone su categoría y su cuenta.
+                    if let Some((cat, acc)) = ws.core.guess_from_note(&f.note, ty) {
+                        if f.cat.is_none() || f.cat_guessed {
+                            f.cat = cat;
+                            f.cat_guessed = true;
+                        }
+                        if !acc.is_empty() {
+                            f.account = acc;
+                        }
                     }
                 }
-            });
-            field(ui, if f.kind == 2 { "Nota (opcional)" } else { "Concepto" });
-            w::text_field(ui, &mut f.note, if f.kind == 2 { "Ahorro mensual…" } else { "Supermercado, nómina…" }, f32::INFINITY);
-            if f.kind == 2 {
-                field(ui, "De la cuenta");
-                let mut dummy = String::new();
-                account_picker(ui, "tf_from", &mut f.from, &accounts, false, &mut dummy);
-                field(ui, "A la cuenta");
-                account_picker(ui, "tf_to", &mut f.to, &accounts, true, &mut f.new_account);
-            } else {
-                let ty = if f.kind == 1 { "ingreso" } else { "gasto" };
-                field(ui, "Categoría");
-                let mut opts = vec![(None, if ty == "gasto" { "Otros".to_string() } else { "Otros ingresos".to_string() })];
-                opts.extend(ws.active_categories(ty));
-                w::search_select(ui, "tx_cat", &mut f.cat, &opts, 300.0, "Escribe para buscar…");
-                field(ui, "Cuenta");
-                account_picker(ui, "tx_acc", &mut f.account, &accounts, true, &mut f.new_account);
-                field(ui, "Etiquetas (opcional, separadas por comas)");
-                w::text_field(ui, &mut f.tags, "vacaciones, reembolsable", f32::INFINITY);
+                let sugg = ws.core.note_suggestions(&f.note, ty, 4);
+                if !f.note.trim().is_empty() && !sugg.is_empty() && !(sugg.len() == 1 && sugg[0].eq_ignore_ascii_case(f.note.trim())) {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new("¿Quisiste decir?").font(theme::ui_font(12.0)).color(pal.muted));
+                        for sgt in sugg {
+                            if w::button(ui, None, &sgt, Kind::Ghost).clicked() {
+                                if let Some((cat, acc)) = ws.core.guess_from_note(&sgt, ty) {
+                                    f.cat = cat;
+                                    f.cat_guessed = true;
+                                    if !acc.is_empty() {
+                                        f.account = acc;
+                                    }
+                                }
+                                f.note = sgt;
+                            }
+                        }
+                    });
+                }
             }
-            field(ui, "Fecha");
-            date_field(ui, &mut f.date);
-            if f.kind != 2 && f.id.is_none() {
+            if f.kind == 2 {
+                ui.columns(2, |c| {
+                    form_label(&mut c[0], ic::ARROW_UP_RIGHT, "De la cuenta");
+                    let mut dummy = String::new();
+                    let w0 = c[0].available_width();
+                    account_picker_w(&mut c[0], "tf_from", &mut f.from, &accounts, false, &mut dummy, w0);
+                    form_label(&mut c[1], ic::ARROW_DOWN_RIGHT, "A la cuenta");
+                    let w1 = c[1].available_width();
+                    account_picker_w(&mut c[1], "tf_to", &mut f.to, &accounts, true, &mut f.new_account, w1);
+                });
+            } else {
+                form_label(ui, ic::TAG_SIMPLE, "Categoría");
+                // «Otros» es el valor por defecto (sin categoría): no se repite
+                // aunque exista como categoría.
+                let fallback = if ty == "gasto" { "Otros" } else { "Otros ingresos" };
+                let mut opts = vec![(None, fallback.to_string())];
+                for (id, name) in ws.active_categories(ty) {
+                    if name.eq_ignore_ascii_case(fallback) {
+                        if f.cat == id {
+                            f.cat = None;
+                        }
+                    } else {
+                        opts.push((id, name));
+                    }
+                }
+                let before = f.cat;
+                w::search_select(ui, "tx_cat", &mut f.cat, &opts, full, "Escribe para buscar o elige abajo…");
                 ui.add_space(6.0);
+                let cats = ws.cache.categories.clone();
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+                    for (id, name) in &opts {
+                        let color = match id {
+                            Some(id) => cats.iter().find(|c| c.id == *id).map(|c| theme::cat_color_for(c.id, &c.color)).unwrap_or(pal.muted),
+                            None => pal.muted,
+                        };
+                        if cat_chip(ui, name, color, f.cat == *id).clicked() {
+                            f.cat = *id;
+                        }
+                    }
+                });
+                if f.cat != before {
+                    f.cat_guessed = false;
+                }
+                ui.add_space(2.0);
+            }
+            ui.columns(2, |c| {
+                if f.kind != 2 {
+                    form_label(&mut c[0], ic::BANK, "Cuenta");
+                    let w0 = c[0].available_width();
+                    account_picker_w(&mut c[0], "tx_acc", &mut f.account, &accounts, true, &mut f.new_account, w0);
+                    form_label(&mut c[1], ic::CALENDAR_BLANK, "Fecha");
+                    date_field(&mut c[1], &mut f.date);
+                } else {
+                    form_label(&mut c[0], ic::CALENDAR_BLANK, "Fecha");
+                    date_field(&mut c[0], &mut f.date);
+                }
+            });
+            if f.kind != 2 {
+                form_label(ui, ic::HASH, "Etiquetas (opcional, separadas por comas)");
+                w::text_field(ui, &mut f.tags, "vacaciones, reembolsable", full);
+            }
+            if f.kind != 2 && f.id.is_none() {
+                ui.add_space(8.0);
                 ui.checkbox(&mut f.as_template, "Guardar también como gasto rápido");
             }
+            ui.add_space(6.0);
+            w::hline(ui);
             let del_label = if f.id.is_some() || editing_transfer { Some("Borrar") } else { None };
             let (save, cancel, del) = footer(ui, &f.error, "Guardar", del_label);
             if cancel {
@@ -594,9 +770,6 @@ fn body(ws: &mut Workspace, ui: &mut Ui, modal: &mut Modal) -> bool {
                     if f.rename_to.trim() != orig && w::button(ui, Some(ic::PENCIL_SIMPLE), "Renombrar", Kind::Secondary).clicked() {
                         match ws.core.rename_account(&orig, &f.rename_to) {
                             Ok(()) => {
-                                if ws.quick.account.eq_ignore_ascii_case(&orig) {
-                                    ws.quick.account = f.rename_to.trim().to_string();
-                                }
                                 ws.toast("Cuenta renombrada", false);
                                 extra_close = true;
                             }

@@ -24,6 +24,10 @@ rfd = "0.15"
 image = { version = "0.25", default-features = false, features = ["png"] }
 dirs = "6"
 
+# Windows Hello (desbloqueo con el PIN del ordenador).
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Foundation", "Security_Credentials", "Security_Cryptography", "Storage_Streams", "Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
 [build-dependencies]
 winresource = "0.1"
 
